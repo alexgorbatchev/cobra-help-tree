@@ -7,6 +7,7 @@ A lightweight, zero-configuration Go library that replaces Cobra's default flat 
 - **Nested ASCII Hierarchy**: Automatically discovers and renders multi-level command trees using modern rounded box-drawing glyphs (`├─ `, `╰─ `, `│  `).
 - **Exact Rune Column Alignment**: Accurately calculates UTF-8 display widths so command descriptions remain vertically aligned regardless of branch depth.
 - **Dynamic Terminal Width Protection**: Detects terminal width via `golang.org/x/term` and `$COLUMNS` and truncates descriptions with trailing ellipsis (`...`) before line wrapping occurs.
+- **Native Dual-Mode (`AGENT=1`)**: Automatically switches to token-conservative key-value help when `AGENT=1` is present.
 - **Drop-In One-Liner Integration**: Call `cobrahelptree.Setup(rootCmd)` to upgrade your entire CLI application.
 - **Zero Heavy Dependencies**: Built solely on Cobra and Go standard/extended terminal tooling.
 
@@ -102,7 +103,24 @@ cobrahelptree.Setup(rootCmd, cobrahelptree.TreeOptions{
     IncludeRoot:   false, // Set true to render root node at top
     MinPadding:    4,     // Spacing between command and description
     TerminalWidth: 100,   // Manual column width limit (0 = auto-detect)
+    DisableAgent:  false, // Set true to disable automatic AGENT=1 mode switching
+    TechCatalog:   catalog, // Optional machine metadata catalog for AGENT=1 mode
 })
+```
+
+# Dual-Mode Agent Output (`AGENT=1`)
+
+When the `AGENT=1`, `AGENT=true`, or `AGENT=yes` environment variable is set, `cobra-help-tree` automatically emits concise, token-conservative output without ASCII tree lines:
+
+```yaml
+command: mytool user
+summary: Manage user accounts
+usage: mytool user [flags] [command]
+subcommands:
+  - create: Create a new user
+  - delete: Remove a user
+flags:
+  -h, --help bool: help for user (default: "false")
 ```
 
 # License

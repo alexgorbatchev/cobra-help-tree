@@ -110,6 +110,30 @@ func TestGetTerminalWidth(t *testing.T) {
 	_ = GetTerminalWidth()
 }
 
+func TestIsAgentMode(t *testing.T) {
+	tests := []struct {
+		envVal string
+		want   bool
+	}{
+		{"1", true},
+		{"true", true},
+		{"TRUE", true},
+		{"yes", true},
+		{"YES", true},
+		{"0", false},
+		{"false", false},
+		{"", false},
+		{"random", false},
+	}
+
+	for _, tt := range tests {
+		t.Setenv("AGENT", tt.envVal)
+		if got := IsAgentMode(); got != tt.want {
+			t.Errorf("IsAgentMode() with AGENT=%q = %v, want %v", tt.envVal, got, tt.want)
+		}
+	}
+}
+
 func TestRenderTreeHelp(t *testing.T) {
 	root := buildSampleCommandHierarchy()
 	root.Example = "  app playlist list\n  app track add song.mp3"
@@ -155,8 +179,51 @@ func TestRenderTreeHelp(t *testing.T) {
 	}
 }
 
+func TestRenderAgentHelp(t *testing.T) {
+	root := buildSampleCommandHierarchy()
+
+	// 1. Nil check
+	if got := RenderAgentHelp(nil); got != "" {
+		t.Errorf("expected empty string for nil command, got %q", got)
+	}
+
+	// 2. Default agent output
+	agentOut := RenderAgentHelp(root)
+	if !strings.Contains(agentOut, "command: app") || !strings.Contains(agentOut, "summary: Sample CLI application") {
+		t.Errorf("unexpected agent help output:\n%s", agentOut)
+	}
+	if !strings.Contains(agentOut, "subcommands:\n  - playlist: Inspect and manage playlists") {
+		t.Errorf("agent help missing subcommands:\n%s", agentOut)
+	}
+
+	// 3. With TechCatalog
+	catalog := TechCatalog{
+		"app": TechInfo{
+			Summary:     "Overridden Summary",
+			Description: "Overridden Description",
+			Args:        "<required-arg>",
+			MutatesDB:   true,
+			AutoBackup:  true,
+			Metadata: map[string]string{
+				"custom_key": "custom_val",
+			},
+		},
+	}
+
+	catOut := RenderAgentHelp(root, catalog)
+	if !strings.Contains(catOut, "summary: Overridden Summary") || !strings.Contains(catOut, "mutates_db: true") {
+		t.Errorf("techCatalog not reflected in agent output:\n%s", catOut)
+	}
+	if !strings.Contains(catOut, "custom_key: custom_val") {
+		t.Errorf("metadata not reflected in agent output:\n%s", catOut)
+	}
+}
+
 func TestSetup(t *testing.T) {
 	root := buildSampleCommandHierarchy()
+
+	// 1. Setup in human mode
+	t.Setenv("AGENT", "0")
 	Setup(root)
 
 	buf := new(bytes.Buffer)
@@ -172,6 +239,23 @@ func TestSetup(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "Available Commands:") || !strings.Contains(out, "├─ playlist") {
 		t.Errorf("expected tree help screen from Setup, got:\n%s", out)
+	}
+
+	// 2. Setup in agent mode
+	t.Setenv("AGENT", "1")
+	bufAgent := new(bytes.Buffer)
+	root.SetOut(bufAgent)
+	root.SetErr(bufAgent)
+	root.SetArgs([]string{"--help"})
+
+	err = root.Execute()
+	if err != nil {
+		t.Fatalf("root --help in agent mode failed: %v", err)
+	}
+
+	outAgent := bufAgent.String()
+	if !strings.Contains(outAgent, "command: app") || strings.Contains(outAgent, "Available Commands:") {
+		t.Errorf("expected agent mode output from Setup, got:\n%s", outAgent)
 	}
 
 	// Setup nil check
