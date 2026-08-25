@@ -52,7 +52,7 @@ func main() {
 }
 ```
 
-### Rendered Output Example
+### Rendered Output (Human Mode: `AGENT=0` / Default)
 
 ```
 engine-cli is a command-line tool designed for DJs to inspect, repair, synchronize,
@@ -62,28 +62,29 @@ Usage:
   engine-cli [flags] [command]
 
 Available Commands:
-├─ artwork                                             Manage and fix album cover artwork
-│  ├─ normalize                                        Crop album cover art to 1:1 square for DJ jo...
-│  ╰─ prune                                            Clean up unused cover art and reclaim disk s...
-├─ backup                                              Create a safety backup snapshot of your Engi...
+├─ library                                             Manage, audit, synchronize, and back up Engine DJ databases
+│  ├─ backup [path]                                    Create a safety backup snapshot of your Engine DJ library
+│  ├─ prune                                            Clean up unused cover art and reclaim disk space
+│  ├─ restore <path>                                   Restore your Engine DJ library from a previous backup snapshot
+│  ├─ sync                                             Update song information in Engine DJ from audio files on disk
+│  ╰─ verify                                           Check your library for missing songs, broken links, and empty playlists
 ├─ playlist                                            Inspect and manage playlists and folders
 │  ├─ create <name>                                    Create a new playlist or folder
 │  ├─ inspect <pl|id>                                  Display all songs inside a playlist
-│  ├─ list                                             Display all playlists and folders in your li...
-│  ├─ move <pl|id>                                     Relocate a playlist or folder under a parent...
+│  ├─ list                                             Display all playlists and folders in your library
+│  ├─ move <pl|id>                                     Relocate a playlist or folder under a parent folder
 │  ├─ rm <pl|id>                                       Delete a playlist or folder
 │  ╰─ track                                            Manage track memberships inside playlists
 │     ├─ add <pl|id> <tr|id|path...>                   Add track(s) to a playlist
 │     ├─ move <src-pl|id> <dst-pl|id> <tr|id|path...>  Move track(s) from one playlist to another
 │     ╰─ rm <pl|id> <tr|id|path...>                    Remove track(s) from a playlist
-├─ restore <backup-dir>                                Restore your Engine DJ library from a previo...
-├─ sync                                                Update song information in Engine DJ from au...
-├─ track                                               Manage audio files and collection tracks
-│  ├─ add <path...>                                    Import audio file(s) into your collection
-│  ├─ move <tr|id|path> <dest-path>                    Move an audio file on disk and update its co...
-│  ├─ relocate                                         Batch-fix audio file paths across drives or ...
-│  ╰─ rm <tr|id|path...>                               Remove track(s) from your collection
-╰─ verify                                              Check your library for missing songs, broken...
+╰─ track                                               Manage audio files and collection tracks
+   ├─ add <path...>                                    Import audio file(s) into your collection
+   ├─ artwork                                          Manage and fix embedded track cover artwork
+   │  ╰─ normalize                                     Crop album cover art to 1:1 square for DJ jog wheels and player displays
+   ├─ move <tr|id|path> <dest-path>                    Move an audio file on disk and update its collection path
+   ├─ relocate                                         Batch-fix audio file paths across drives or directories
+   ╰─ rm <tr|id|path...>                               Remove track(s) from your collection
 
 Flags:
   -h, --help             help for engine-cli
@@ -94,33 +95,36 @@ Flags:
 Use "engine-cli [command] --help" for more information about a command.
 ```
 
+### Rendered Output (Agent Mode: `AGENT=1`)
+
+```yaml
+command: engine-cli
+summary: Engine DJ SQLite database and artwork CLI management utility
+description: CLI utility for inspecting, repairing, synchronizing, and backing up Engine DJ collection databases (Database2/m.db, p.db) and Artwork/ cache.
+usage: engine-cli [flags]
+subcommands:
+  - library: Engine DJ database and library maintenance command group
+  - playlist: Playlist and folder hierarchy management group
+  - track: Manage audio files and collection tracks
+flags:
+  -h, --help bool: help for engine-cli (default: "false")
+  -l, --lib-dir string: Path to the Engine Library directory (default: "/Users/alex/Music/Engine Library")
+  --no-backup bool: Disable automatic backup snapshot before modifying database (default: "false")
+  -v, --version bool: version for engine-cli (default: "false")
+```
+
 # Configuration Options
 
 Customize tree rendering by passing `TreeOptions`:
 
 ```go
 cobrahelptree.Setup(rootCmd, cobrahelptree.TreeOptions{
-    IncludeRoot:   false, // Set true to render root node at top
-    MinPadding:    4,     // Spacing between command and description
-    TerminalWidth: 100,   // Manual column width limit (0 = auto-detect)
-    DisableAgent:  false, // Set true to disable automatic AGENT=1 mode switching
+    IncludeRoot:   false,   // Set true to render root node at top
+    MinPadding:    4,       // Spacing between command and description
+    TerminalWidth: 100,     // Manual column width limit (0 = auto-detect)
+    DisableAgent:  false,   // Set true to disable automatic AGENT=1 mode switching
     TechCatalog:   catalog, // Optional machine metadata catalog for AGENT=1 mode
 })
-```
-
-# Dual-Mode Agent Output (`AGENT=1`)
-
-When the `AGENT=1`, `AGENT=true`, or `AGENT=yes` environment variable is set, `cobra-help-tree` automatically emits concise, token-conservative output without ASCII tree lines:
-
-```yaml
-command: mytool user
-summary: Manage user accounts
-usage: mytool user [flags] [command]
-subcommands:
-  - create: Create a new user
-  - delete: Remove a user
-flags:
-  -h, --help bool: help for user (default: "false")
 ```
 
 # License
