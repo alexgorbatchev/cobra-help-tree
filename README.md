@@ -54,21 +54,43 @@ func main() {
 ### Rendered Output (`mytool --help`)
 
 ```
-Multi-level CLI application
+engine-cli is a command-line tool designed for DJs to inspect, repair, synchronize,
+and safely back up Engine DJ music libraries and album cover art on your computer or external USB drives.
 
 Usage:
-  mytool [flags] [command]
+  engine-cli [flags] [command]
 
 Available Commands:
-├─ user                                                Manage user accounts
-│  ├─ create <name>                                    Create a new user
-│  ╰─ delete <id>                                      Remove a user
-╰─ version                                             Print version info
+├─ artwork                                             Manage and fix album cover artwork
+│  ├─ normalize                                        Crop album cover art to 1:1 square for DJ jo...
+│  ╰─ prune                                            Clean up unused cover art and reclaim disk s...
+├─ backup                                              Create a safety backup snapshot of your Engi...
+├─ playlist                                            Inspect and manage playlists and folders
+│  ├─ create <name>                                    Create a new playlist or folder
+│  ├─ inspect <pl|id>                                  Display all songs inside a playlist
+│  ├─ list                                             Display all playlists and folders in your li...
+│  ├─ move <pl|id>                                     Relocate a playlist or folder under a parent...
+│  ├─ rm <pl|id>                                       Delete a playlist or folder
+│  ╰─ track                                            Manage track memberships inside playlists
+│     ├─ add <pl|id> <tr|id|path...>                   Add track(s) to a playlist
+│     ├─ move <src-pl|id> <dst-pl|id> <tr|id|path...>  Move track(s) from one playlist to another
+│     ╰─ rm <pl|id> <tr|id|path...>                    Remove track(s) from a playlist
+├─ restore <backup-dir>                                Restore your Engine DJ library from a previo...
+├─ sync                                                Update song information in Engine DJ from au...
+├─ track                                               Manage audio files and collection tracks
+│  ├─ add <path...>                                    Import audio file(s) into your collection
+│  ├─ move <tr|id|path> <dest-path>                    Move an audio file on disk and update its co...
+│  ├─ relocate                                         Batch-fix audio file paths across drives or ...
+│  ╰─ rm <tr|id|path...>                               Remove track(s) from your collection
+╰─ verify                                              Check your library for missing songs, broken...
 
 Flags:
-  -h, --help   help for mytool
+  -h, --help             help for engine-cli
+  -l, --lib-dir string   Path to the Engine Library directory (default "/Users/alex/Music/Engine Library")
+      --no-backup        Disable automatic backup snapshot before modifying database
+  -v, --version          version for engine-cli
 
-Use "mytool [command] --help" for more information about a command.
+Use "engine-cli [command] --help" for more information about a command.
 ```
 
 # Configuration Options
