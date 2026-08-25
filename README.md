@@ -51,7 +51,7 @@ func main() {
 }
 ```
 
-### Rendered Output (`mytool --help`)
+### Rendered Output Example
 
 ```
 engine-cli is a command-line tool designed for DJs to inspect, repair, synchronize,
