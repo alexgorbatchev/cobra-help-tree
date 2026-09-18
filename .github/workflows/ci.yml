@@ -18,11 +18,15 @@ jobs:
           go-version: '1.26.x'
           check-latest: true
 
+      # CI runs the same recipes a developer runs, so the checks cannot drift
+      # apart from the ones documented in AGENTS.md.
+      - name: Set up just
+        uses: extractions/setup-just@v4
+
       - name: Verify dependencies
         run: go mod verify
 
-      - name: Run static analysis
-        run: go vet ./...
-
-      - name: Run tests with coverage
-        run: go test -v -race -coverprofile=coverage.out ./...
+      # Formatting, vet and module hygiene, then the tests under -race with the
+      # statement coverage floor enforced; the job fails on any of them.
+      - name: Run linters, tests, and the coverage floor
+        run: just check
