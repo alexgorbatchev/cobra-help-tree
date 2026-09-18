@@ -26,7 +26,7 @@ Reusable Go library for rendering nested Cobra CLI command hierarchies as clean,
 ## Conventions
 - **ASCII Tree Rendering:** Uses Unicode box-drawing branches (`├─ `, `╰─ `, `│  `) with single-line aligned descriptions.
 - **Display Cell Width:** Measure and truncate by terminal cells with `runewidth.StringWidth` and `runewidth.Truncate`, never `utf8.RuneCountInString` or rune slicing. A CJK ideograph or emoji is one rune in two cells, so rune counts break column alignment and overrun the width limit.
-- **Terminal Width Clipping:** Automatically detects terminal width via `golang.org/x/term` / `$COLUMNS` and truncates descriptions with `...` before wrapping.
+- **Terminal Width Handling:** Automatically detects terminal width via `golang.org/x/term` / `$COLUMNS`, truncating command and argument descriptions with `...` and wrapping flag descriptions before line overflow occurs.
 - **Requested Help Goes to Stdout:** Render help via `c.OutOrStdout()`. Cobra's `c.Print` falls back to **stderr**, which silently breaks `--help | less` and `--help > file`.
 - **Deterministic Agent Output:** `AGENT=1` output must be byte-identical across runs. Sort any map before emitting it, and nest caller-supplied maps such as `TechInfo.Metadata` under their own key so they cannot collide with reserved top-level keys.
 - **No Optional Variadic Parameters:** Exported functions take explicit parameters. Optional configuration gets a second named function (`Setup` / `SetupWithOptions`), never `opts ...TreeOptions`, which compiles fine while silently discarding every argument past the first.
