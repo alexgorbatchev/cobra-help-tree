@@ -199,3 +199,42 @@ func TestRenderTreeUsageReportsDeprecation(t *testing.T) {
 		t.Errorf("a command that is not deprecated must carry no notice:\n%s", got)
 	}
 }
+
+func TestRenderTreeUsageWrapsFlagsToTerminalWidth(t *testing.T) {
+	root := &cobra.Command{Use: "app", Short: "App"}
+	root.PersistentFlags().String("global-flag", "",
+		"Service API key, which defaults to the SERVICE_API_KEY environment variable and is very long")
+
+	child := leafCommand("child", "Child command")
+	child.Flags().String("local-flag", "",
+		"A very long description for a local flag that explains all the details and default behavior")
+	root.AddCommand(child)
+
+	const termWidth = 60
+
+	// 1. With TerminalWidth set, both local and inherited flags must be wrapped so no line exceeds termWidth
+	out := RenderTreeUsage(child, nil, TreeOptions{TerminalWidth: termWidth})
+	for _, line := range strings.Split(out, "\n") {
+		if got := runewidth.StringWidth(line); got > termWidth {
+			t.Errorf("line exceeds terminal width %d (%d cells): %q\nFull output:\n%s", termWidth, got, line, out)
+		}
+	}
+
+	// Verify that the sections are present
+	if !strings.Contains(out, "Flags:\n") || !strings.Contains(out, "Global Flags:\n") {
+		t.Fatalf("expected both Flags and Global Flags sections, got:\n%s", out)
+	}
+
+	// 2. With TerminalWidth 0 (unlimited), flag descriptions should not wrap
+	unwrapped := RenderTreeUsage(child, nil, TreeOptions{TerminalWidth: 0})
+	hasLongLine := false
+	for _, line := range strings.Split(unwrapped, "\n") {
+		if runewidth.StringWidth(line) > termWidth {
+			hasLongLine = true
+			break
+		}
+	}
+	if !hasLongLine {
+		t.Fatalf("expected unwrapped usage to have lines longer than %d cells", termWidth)
+	}
+}

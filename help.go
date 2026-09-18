@@ -52,8 +52,8 @@ func RenderTreeUsage(cmd *cobra.Command, cat TechCatalog, opt TreeOptions) strin
 	// flag sets, which flips HasAvailableFlags and so decides whether UseLine
 	// appends "[flags]"; collecting them afterwards makes a command's first render
 	// differ from every later one.
-	localFlagUsages := cmd.LocalFlags().FlagUsages()
-	inheritedFlagUsages := cmd.InheritedFlags().FlagUsages()
+	localFlagUsages := cmd.LocalFlags().FlagUsagesWrapped(opt.TerminalWidth)
+	inheritedFlagUsages := cmd.InheritedFlags().FlagUsagesWrapped(opt.TerminalWidth)
 
 	var sb strings.Builder
 

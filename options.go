@@ -15,7 +15,7 @@ type TreeOptions struct {
 	IncludeRoot   bool // If true, renders the root command node at top
 	MinPadding    int  // Minimum padding between a label and its description (0 = 2)
 	MinLabelWidth int  // Minimum cells reserved for the command and argument columns before padding (0 = 20)
-	TerminalWidth int  // Max line width before clipping descriptions with '...' (0 = auto-detect)
+	TerminalWidth int  // Max line width before clipping descriptions with '...' and wrapping flags (0 = auto-detect)
 
 	// HideGeneratedCommands drops the completion command cobra generates, and its
 	// per-shell subtree, from the human help screens.
