@@ -81,6 +81,13 @@ func RenderAgentHelp(cmd *cobra.Command, cat TechCatalog, opt AgentOptions) stri
 		}
 	}
 
+	if len(info.Env) > 0 {
+		sb.WriteString("env:\n")
+		for _, e := range info.Env {
+			sb.WriteString(agentListItem(e.Name, e.Description))
+		}
+	}
+
 	if info.MutatesDB {
 		sb.WriteString("mutates_db: true\n")
 	}
@@ -131,6 +138,13 @@ func RenderAgentHelp(cmd *cobra.Command, cat TechCatalog, opt AgentOptions) stri
 		sb.WriteString("flags:\n")
 		for _, fl := range flagLines {
 			sb.WriteString(fl + "\n")
+		}
+	}
+
+	if len(info.Quickstart) > 0 {
+		sb.WriteString("quickstart:\n")
+		for _, q := range info.Quickstart {
+			sb.WriteString(agentListItem(q.Command, cleanQuickstartComment(q.Comment)))
 		}
 	}
 

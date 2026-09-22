@@ -8,7 +8,8 @@ A lightweight, zero-configuration Go library that replaces Cobra's default flat 
 - **Terminal Cell Alignment**: Measures display width in terminal cells rather than runes, so descriptions stay aligned when command names contain wide CJK characters or emoji.
 - **Dynamic Terminal Width Protection**: Detects terminal width and truncates descriptions with a trailing ellipsis (`...`) before line wrapping occurs.
 - **Native Dual-Mode (`AGENT=1`)**: Switches to token-conservative key-value help when `AGENT=1` is present.
-- **Documented Positional Arguments**: Renders per-argument descriptions in both modes, in a column shared with the command tree, from a catalog keyed on command paths.
+- **Documented Arguments & Environment Variables**: Renders per-argument and environment variable descriptions in both modes, in a column shared with the command tree, from a catalog keyed on command paths.
+- **Aligned Quickstart Invocations**: Formats example command lines and aligns inline comments with automatic `#` comment prefixing.
 - **Help on Stdout**: Writes requested help screens to stdout so `--help` survives pipes and redirection.
 - **Drop-In One-Liner Integration**: Call `cobrahelptree.Setup(rootCmd)` to replace every screen Cobra prints for an entire CLI application, on `--help` and after an error alike.
 
@@ -17,6 +18,8 @@ A lightweight, zero-configuration Go library that replaces Cobra's default flat 
 - Call one function on your root command, and every screen the CLI prints switches to a tree view: the `--help` screen, and the one shown after a mistyped flag or argument.
 - Commands appear as an indented tree, with their descriptions lined up in a column down the right-hand side.
 - Commands whose arguments you describe list them above the tree, in the same description column.
+- Environment variables accepted by a command align to the same description column.
+- Quickstart command examples format cleanly with inline comments aligned across the block.
 - Asking for help on a command group shows everything nested beneath it, not just the next level down.
 - Descriptions too long for the window are shortened with `...`, so lines never wrap and break the columns.
 - Setting `AGENT=1` swaps the decorated tree for compact output aimed at scripts and AI agents.
@@ -26,8 +29,9 @@ A lightweight, zero-configuration Go library that replaces Cobra's default flat 
 
 - `Setup` installs a help function through Cobra's `SetHelpFunc` and a usage function through `SetUsageFunc`, both on the root command, which every subcommand inherits unless it sets its own. Cobra renders `--help` through the former and the screen that follows a flag or argument error through the latter, so replacing only one leaves the other printing Cobra's flat command list.
 - The two functions split the screen the way Cobra's own defaults do: `RenderTreeHelp` prints the long description and then the usage screen, `RenderTreeUsage` prints the usage screen alone, so an error does not repeat the whole command description.
-- Cobra has no field describing a positional argument — `Use` carries the names as free text and `ValidArgs` is the enum of accepted values for the first positional argument — so per-argument descriptions come from a `TechCatalog` entry. Human mode renders them under `Arguments:` and agent mode under `args:`; a command's `ValidArgs` is reported separately under `valid_args:`, with the description Cobra packs behind a tab split off.
-- The arguments block and the command tree are measured together, so one description column runs down the whole screen.
+- Cobra has no field describing a positional argument or an environment variable — `Use` carries argument names as free text and `ValidArgs` is the enum of accepted values for the first positional argument — so descriptions for both come from a `TechCatalog` entry. Human mode renders them under `Arguments:` and `Environment variables:` and agent mode under `args:` and `env:`; a command's `ValidArgs` is reported separately under `valid_args:`, with the description Cobra packs behind a tab split off.
+- The arguments block, the command tree, and the environment variables block are measured together, so one description column runs down the whole screen.
+- Quickstart examples format with two-space indentation and align `#` comments to a shared column, clipping long comments against terminal width. Agent mode renders them under `quickstart:`.
 - `FormatCommandTree` walks `cmd.Commands()` recursively and records a branch prefix per node. Which commands count as listable is Cobra's own decision, `Command.IsAvailableCommand`, so hidden commands, deprecated commands, and commands that are neither runnable nor the parent of a runnable one are absent from the tree exactly as they are absent from Cobra's default help.
 - A deprecated command is listed nowhere, which is Cobra's behaviour, so its own help screen is the one place it can still be announced: `RenderTreeUsage` prints `Deprecated: <your message>` above the usage block and agent mode reports a `deprecated:` key. Cobra prints the same string, but only once the command has already run.
 - Cobra's generated `help` command is absent for the same reason: `IsAvailableCommand` excludes it by identity (`Parent().helpCommand == c`), and only Cobra's help *template* re-adds it by name, which this library does not do. The generated `completion` command is listed by default, as Cobra lists it; `TreeOptions.HideGeneratedCommands` drops it from the human screens. That filter is aimed at a command named `completion` directly under the root, which is the only place Cobra generates one — `InitDefaultCompletionCmd` returns early when a root child already uses that name — so a `completion` command of your own deeper in the tree is never mistaken for Cobra's.
@@ -206,7 +210,7 @@ flags:
 
 ### Command Metadata (`TechCatalog`)
 
-Attach per-command arguments and metadata by supplying a `TechCatalog` keyed on full command paths. `Args` is read by both modes; the remaining fields are machine detail for agent mode:
+Attach per-command arguments, environment variables, quickstart examples, and metadata by supplying a `TechCatalog` keyed on full command paths. `Args`, `Env`, and `Quickstart` are read by both modes; the remaining fields are machine detail for agent mode:
 
 ```go
 catalog := cobrahelptree.TechCatalog{
@@ -214,6 +218,13 @@ catalog := cobrahelptree.TechCatalog{
         Args: []cobrahelptree.ArgSpec{
             {Name: "<name>", Description: "Login name for the new user"},
             {Name: "[email]", Description: "Address invitations are sent to"},
+        },
+        Env: []cobrahelptree.EnvSpec{
+            {Name: "MYTOOL_DEFAULT_ROLE", Description: "Initial role assigned to new users"},
+        },
+        Quickstart: []cobrahelptree.QuickstartItem{
+            {Command: "mytool user create alice", Comment: "create user with default role"},
+            {Command: "mytool user create bob bob@example.com", Comment: "create user and send invite"},
         },
         MutatesDB: true,
         Metadata: map[string]string{
@@ -231,7 +242,9 @@ if err := cobrahelptree.SetupWithOptions(rootCmd, cobrahelptree.HelpOptions{
 }
 ```
 
-`ArgSpec.Name` is rendered verbatim, so it carries whatever convention the CLI documents (`<name>`, `[name]`, `<name...>`); the library adds no brackets of its own, because it cannot know whether an argument is required, optional or variadic. Human mode lists the arguments above the command tree, sharing its description column:
+`ArgSpec.Name` is rendered verbatim, so it carries whatever convention the CLI documents (`<name>`, `[name]`, `<name...>`); the library adds no brackets of its own, because it cannot know whether an argument is required, optional or variadic.
+
+Human mode lists the arguments and environment variables aligned to the command tree's description column, and formats quickstart commands with aligned inline `#` comments:
 
 ```
 $ mytool user create --help
@@ -241,14 +254,21 @@ Usage:
   mytool user create <name> [flags]
 
 Arguments:
-  <name>              Login name for the new user
-  [email]             Address invitations are sent to
+  <name>               Login name for the new user
+  [email]              Address invitations are sent to
+
+Environment variables:
+  MYTOOL_DEFAULT_ROLE  Initial role assigned to new users
 
 Flags:
   -h, --help   help for create
 
 Global Flags:
   -c, --config string   Path to configuration file (default "~/.config/mytool.yaml")
+
+Quickstart:
+  mytool user create alice                # create user with default role
+  mytool user create bob bob@example.com  # create user and send invite
 ```
 
 `Metadata` renders as a nested mapping with keys in alphabetical order, so the output is byte-identical across runs and a metadata key cannot collide with a reserved top-level key. Below, `usage` appears in both scopes without ambiguity:
@@ -260,13 +280,19 @@ usage: mytool user create <name> [flags]
 args:
   - <name>: Login name for the new user
   - [email]: Address invitations are sent to
+env:
+  - MYTOOL_DEFAULT_ROLE: Initial role assigned to new users
 mutates_db: true
 metadata:
   scope: admin
   table: users
   usage: 1 write per call
 flags:
+  -c, --config string: Path to configuration file (default: "~/.config/mytool.yaml")
   -h, --help bool: help for create (default: "false")
+quickstart:
+  - mytool user create alice: create user with default role
+  - mytool user create bob bob@example.com: create user and send invite
 ```
 
 A command's `cobra.ValidArgs` is reported under its own `valid_args:` key rather than as `args:`, because it is the enum of values the first positional argument accepts, not the argument list. Entries built with `cobra.CompletionWithDesc` carry their description behind a tab, which is split off so every line stays parseable:
@@ -303,7 +329,7 @@ err := cobrahelptree.SetupWithOptions(rootCmd, cobrahelptree.HelpOptions{
 
 | Field | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `Catalog` | `TechCatalog` | `nil` | Per-command arguments, read by both modes, plus machine metadata read by `AGENT=1` mode |
+| `Catalog` | `TechCatalog` | `nil` | Per-command arguments, environment variables, quickstart examples, read by both modes, plus machine metadata read by `AGENT=1` mode |
 | `Tree.IncludeRoot` | `bool` | `false` | Render the root command as the first line of the tree |
 | `Tree.MinPadding` | `int` | `2` | Minimum cells between the label column and the description column |
 | `Tree.MinLabelWidth` | `int` | `20` | Minimum cells reserved for the command and argument columns, so narrow screens keep a stable description column |

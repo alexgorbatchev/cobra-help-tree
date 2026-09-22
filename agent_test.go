@@ -403,3 +403,100 @@ func TestRenderAgentHelpReportsDeprecation(t *testing.T) {
 		t.Errorf("a command that is not deprecated must carry no deprecated key:\n%s", got)
 	}
 }
+
+func TestRenderAgentHelpRendersEnvironmentVariables(t *testing.T) {
+	root := buildSampleCommandHierarchy()
+	catalog := TechCatalog{
+		"app": {
+			Env: []EnvSpec{
+				{Name: "APP_TOKEN", Description: "Bearer token for API access"},
+				{Name: "APP_PORT", Description: "Port to listen on"},
+			},
+		},
+	}
+
+	out := RenderAgentHelp(root, catalog, AgentOptions{})
+	want := "env:\n  - APP_TOKEN: Bearer token for API access\n  - APP_PORT: Port to listen on\n"
+	if !strings.Contains(out, want) {
+		t.Errorf("agent output missing env block:\nwant:\n%s\ngot:\n%s", want, out)
+	}
+}
+
+func TestRenderAgentHelpRendersQuickstart(t *testing.T) {
+	root := buildSampleCommandHierarchy()
+	catalog := TechCatalog{
+		"app": {
+			Quickstart: []QuickstartItem{
+				{Command: "app server start", Comment: "run server in foreground"},
+				{Command: "app secret set", Comment: "# set secret"},
+				{Command: "app no-desc", Comment: ""},
+			},
+		},
+	}
+
+	out := RenderAgentHelp(root, catalog, AgentOptions{})
+	want := "quickstart:\n  - app server start: run server in foreground\n  - app secret set: set secret\n  - app no-desc\n"
+	if !strings.Contains(out, want) {
+		t.Errorf("agent output missing quickstart block:\nwant:\n%s\ngot:\n%s", want, out)
+	}
+}
+
+func TestRenderAgentHelpClipsEnvAndQuickstart(t *testing.T) {
+	root := buildSampleCommandHierarchy()
+	catalog := TechCatalog{
+		"app": {
+			Env: []EnvSpec{
+				{Name: "APP_TOKEN", Description: "A very long description for the token variable"},
+			},
+			Quickstart: []QuickstartItem{
+				{Command: "app run", Comment: "A very long quickstart comment that should get clipped"},
+			},
+		},
+	}
+
+	out := RenderAgentHelp(root, catalog, AgentOptions{MaxLineWidth: 35})
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "APP_TOKEN") || strings.Contains(line, "app run") {
+			if runewidth.StringWidth(line) > 35 {
+				t.Fatalf("line width exceeds max cells 35: %q", line)
+			}
+			if !strings.HasSuffix(line, "...") {
+				t.Fatalf("line should end with ellipsis: %q", line)
+			}
+		}
+	}
+}
+
+func TestRenderAgentHelpEnvWithoutDescription(t *testing.T) {
+	root := buildSampleCommandHierarchy()
+	catalog := TechCatalog{
+		"app": {
+			Env: []EnvSpec{
+				{Name: "APP_SECRET", Description: ""},
+			},
+		},
+	}
+
+	out := RenderAgentHelp(root, catalog, AgentOptions{})
+	want := "env:\n  - APP_SECRET\n"
+	if !strings.Contains(out, want) {
+		t.Errorf("agent help missing descriptionless env var:\nwant:\n%s\ngot:\n%s", want, out)
+	}
+}
+
+func TestRenderAgentHelpQuickstartBareHashComment(t *testing.T) {
+	root := buildSampleCommandHierarchy()
+	catalog := TechCatalog{
+		"app": {
+			Quickstart: []QuickstartItem{
+				{Command: "app run", Comment: "#"},
+			},
+		},
+	}
+
+	out := RenderAgentHelp(root, catalog, AgentOptions{})
+	want := "quickstart:\n  - app run\n"
+	if !strings.Contains(out, want) {
+		t.Errorf("agent help with bare '#' comment should render without comment:\nwant:\n%s\ngot:\n%s", want, out)
+	}
+}

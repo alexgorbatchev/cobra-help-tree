@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mattn/go-runewidth"
 	"github.com/spf13/cobra"
 )
 
@@ -73,12 +74,15 @@ func RenderTreeUsage(cmd *cobra.Command, cat TechCatalog, opt TreeOptions) strin
 	sb.WriteString(useLine)
 	sb.WriteString("\n")
 
-	// The arguments block and the command tree are one screen, so they are measured
-	// together and share a description column. Cobra carries no per-argument
-	// description of its own, so the catalog is the only source for the former.
-	args := argRows(cat[cmd.CommandPath()].Args)
+	// The arguments block, the command tree, and the environment variables block
+	// are one screen, so they are measured together and share a description column.
+	// Cobra carries no per-argument or per-env description of its own, so the
+	// catalog is the only source for both.
+	info := cat[cmd.CommandPath()]
+	args := argRows(info.Args)
 	tree := commandTreeRows(cmd, opt)
-	descStartCol := descStartColumn(opt, args, tree)
+	envs := envRows(info.Env)
+	descStartCol := descStartColumn(opt, args, tree, envs)
 
 	if len(args) > 0 {
 		sb.WriteString("\nArguments:\n")
@@ -91,6 +95,11 @@ func RenderTreeUsage(cmd *cobra.Command, cat TechCatalog, opt TreeOptions) strin
 		sb.WriteString(treeStr)
 	}
 
+	if len(envs) > 0 {
+		sb.WriteString("\nEnvironment variables:\n")
+		sb.WriteString(renderLabelRows(envs, descStartCol, opt, opt.TerminalWidth))
+	}
+
 	// Flags local to this command, then those inherited from its parents.
 	if strings.TrimRight(localFlagUsages, "\n") != "" {
 		sb.WriteString("\nFlags:\n")
@@ -101,6 +110,12 @@ func RenderTreeUsage(cmd *cobra.Command, cat TechCatalog, opt TreeOptions) strin
 		sb.WriteString(inheritedFlagUsages)
 	}
 
+	quickstartStr := renderQuickstart(info.Quickstart, opt, opt.TerminalWidth)
+	if quickstartStr != "" {
+		sb.WriteString("\nQuickstart:\n")
+		sb.WriteString(quickstartStr)
+	}
+
 	if cmd.Example != "" {
 		sb.WriteString("\nExamples:\n")
 		sb.WriteString(strings.TrimRight(cmd.Example, "\n"))
@@ -109,6 +124,45 @@ func RenderTreeUsage(cmd *cobra.Command, cat TechCatalog, opt TreeOptions) strin
 
 	if treeStr != "" {
 		sb.WriteString(fmt.Sprintf("\nUse %q for more information about a command.\n", cmd.CommandPath()+" [command] --help"))
+	}
+
+	return sb.String()
+}
+
+const quickstartIndent = "  "
+
+// renderQuickstart renders quickstart items with commands indented and inline
+// comments aligned to a shared column and prefixed with "# ".
+func renderQuickstart(items []QuickstartItem, opt TreeOptions, termWidth int) string {
+	if len(items) == 0 {
+		return ""
+	}
+
+	widest := 0
+	for _, item := range items {
+		if w := runewidth.StringWidth(quickstartIndent + item.Command); w > widest {
+			widest = w
+		}
+	}
+
+	commentCol := widest + opt.MinPadding
+
+	var sb strings.Builder
+	for _, item := range items {
+		cmdStr := quickstartIndent + item.Command
+		clean := cleanQuickstartComment(item.Comment)
+		if clean == "" {
+			sb.WriteString(cmdStr)
+			sb.WriteString("\n")
+			continue
+		}
+
+		comment := "# " + clean
+		padLen := commentCol - runewidth.StringWidth(cmdStr)
+		sb.WriteString(cmdStr)
+		sb.WriteString(strings.Repeat(" ", padLen))
+		sb.WriteString(clipDescription(comment, commentCol, termWidth))
+		sb.WriteString("\n")
 	}
 
 	return sb.String()

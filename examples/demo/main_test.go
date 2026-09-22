@@ -29,9 +29,36 @@ func TestDemoRendersTheDocumentedScreens(t *testing.T) {
 		"Arguments:\n  <name>",
 		"[email]",
 		"Login name for the new user",
+		"Environment variables:\n  MYTOOL_DEFAULT_ROLE  Initial role assigned to new users",
+		"Quickstart:\n  mytool user create alice                # create user with default role\n  mytool user create bob bob@example.com  # create user and send invite",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("help screen missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
+func TestDemoRendersAgentHelp(t *testing.T) {
+	t.Setenv("AGENT", "1")
+
+	root := newRootCommand()
+	out := new(bytes.Buffer)
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"user", "create", "--help"})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("user create --help (agent): %v", err)
+	}
+
+	for _, want := range []string{
+		"command: mytool user create",
+		"env:\n  - MYTOOL_DEFAULT_ROLE: Initial role assigned to new users",
+		"quickstart:\n  - mytool user create alice: create user with default role\n  - mytool user create bob bob@example.com: create user and send invite",
+		"metadata:\n  scope: admin\n  table: users\n  usage: 1 write per call",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("agent help screen missing %q:\n%s", want, out.String())
 		}
 	}
 }

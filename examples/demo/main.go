@@ -52,7 +52,19 @@ func newRootCommand() *cobra.Command {
 				{Name: "<name>", Description: "Login name for the new user"},
 				{Name: "[email]", Description: "Address invitations are sent to"},
 			},
+			Env: []cobrahelptree.EnvSpec{
+				{Name: "MYTOOL_DEFAULT_ROLE", Description: "Initial role assigned to new users"},
+			},
+			Quickstart: []cobrahelptree.QuickstartItem{
+				{Command: "mytool user create alice", Comment: "create user with default role"},
+				{Command: "mytool user create bob bob@example.com", Comment: "create user and send invite"},
+			},
 			MutatesDB: true,
+			Metadata: map[string]string{
+				"table": "users",
+				"scope": "admin",
+				"usage": "1 write per call",
+			},
 		},
 		"mytool user delete": {
 			Args:      []cobrahelptree.ArgSpec{{Name: "<id>", Description: "Numeric id of the user to remove"}},

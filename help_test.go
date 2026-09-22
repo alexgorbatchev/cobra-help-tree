@@ -238,3 +238,240 @@ func TestRenderTreeUsageWrapsFlagsToTerminalWidth(t *testing.T) {
 		t.Fatalf("expected unwrapped usage to have lines longer than %d cells", termWidth)
 	}
 }
+
+func TestRenderTreeUsageRendersEnvironmentVariables(t *testing.T) {
+	root := buildSampleCommandHierarchy()
+	create := findCommand(t, root, "app playlist create")
+	catalog := TechCatalog{
+		"app playlist create": {
+			Env: []EnvSpec{
+				{Name: "APP_TOKEN", Description: "Bearer token for API access"},
+				{Name: "APP_PORT", Description: "Port to listen on (default: 8080)"},
+			},
+		},
+	}
+
+	out := RenderTreeUsage(create, catalog, TreeOptions{TerminalWidth: 200})
+
+	if !strings.Contains(out, "\nEnvironment variables:\n") {
+		t.Fatalf("usage missing Environment variables section:\n%s", out)
+	}
+	for _, name := range []string{"APP_TOKEN", "APP_PORT"} {
+		if !strings.Contains(out, "\n  "+name) {
+			t.Errorf("usage missing env var name %q:\n%s", name, out)
+		}
+	}
+
+	wantColumn := defaultMinLabelWidth + defaultMinPadding
+	for _, desc := range []string{"Bearer token for API access", "Port to listen on (default: 8080)"} {
+		if got := descColumn(out, desc); got != wantColumn {
+			t.Errorf("env var description %q starts at column %d, want %d:\n%s", desc, got, wantColumn, out)
+		}
+	}
+}
+
+func TestRenderTreeHelpAlignsEnvironmentVariablesWithTree(t *testing.T) {
+	root := buildSampleCommandHierarchy()
+	playlist := findCommand(t, root, "app playlist")
+
+	catalog := TechCatalog{
+		"app playlist": {
+			Args: []ArgSpec{{Name: "<id>", Description: "Playlist id"}},
+			Env: []EnvSpec{
+				{Name: "VERY_LONG_ENVIRONMENT_VARIABLE_NAME", Description: "Long env var desc"},
+			},
+		},
+	}
+
+	out := RenderTreeHelp(playlist, catalog, TreeOptions{TerminalWidth: 200})
+
+	argCol := descColumn(out, "Playlist id")
+	envCol := descColumn(out, "Long env var desc")
+	treeCol := descColumn(out, "Display all playlists")
+
+	if argCol != envCol || envCol != treeCol {
+		t.Errorf("columns disagree: arg=%d, env=%d, tree=%d:\n%s", argCol, envCol, treeCol, out)
+	}
+}
+
+func TestRenderTreeUsageClipsEnvironmentVariableDescriptions(t *testing.T) {
+	const termWidth = 40
+	root := buildSampleCommandHierarchy()
+	create := findCommand(t, root, "app playlist create")
+	catalog := TechCatalog{
+		"app playlist create": {
+			Env: []EnvSpec{
+				{Name: "APP_TOKEN", Description: "A very long description for the token environment variable that should truncate"},
+			},
+		},
+	}
+
+	out := RenderTreeUsage(create, catalog, TreeOptions{TerminalWidth: termWidth})
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "APP_TOKEN") {
+			if got := runewidth.StringWidth(line); got > termWidth {
+				t.Fatalf("env var line width %d exceeds terminal width %d: %q", got, termWidth, line)
+			}
+			if !strings.HasSuffix(line, "...") {
+				t.Fatalf("expected clipped description to end with '...': %q", line)
+			}
+		}
+	}
+}
+
+func TestRenderTreeUsageRendersQuickstart(t *testing.T) {
+	root := buildSampleCommandHierarchy()
+	catalog := TechCatalog{
+		"app": {
+			Quickstart: []QuickstartItem{
+				{Command: "app playlist list", Comment: "list all playlists"},
+				{Command: "app track add song.mp3", Comment: "# add a track"},
+				{Command: "app no-comment", Comment: ""},
+			},
+		},
+	}
+
+	out := RenderTreeUsage(root, catalog, TreeOptions{TerminalWidth: 200})
+
+	if !strings.Contains(out, "\nQuickstart:\n") {
+		t.Fatalf("usage missing Quickstart section:\n%s", out)
+	}
+	if !strings.Contains(out, "  app playlist list") || !strings.Contains(out, "# list all playlists") {
+		t.Errorf("quickstart item missing automatic '# ' comment prefix:\n%s", out)
+	}
+	if strings.Contains(out, "## add a track") {
+		t.Errorf("quickstart comment already having '#' received double '#':\n%s", out)
+	}
+	if !strings.Contains(out, "  app no-comment\n") {
+		t.Errorf("quickstart item without comment had extra characters:\n%s", out)
+	}
+
+	// Verify internal column alignment of comments
+	listCol := descColumn(out, "# list all playlists")
+	trackCol := descColumn(out, "# add a track")
+	if listCol != trackCol {
+		t.Errorf("quickstart comments column misaligned: %d != %d:\n%s", listCol, trackCol, out)
+	}
+}
+
+func TestRenderTreeUsageClipsQuickstart(t *testing.T) {
+	const termWidth = 45
+	root := buildSampleCommandHierarchy()
+	catalog := TechCatalog{
+		"app": {
+			Quickstart: []QuickstartItem{
+				{Command: "app run", Comment: "A very long quickstart comment that should get clipped cleanly"},
+			},
+		},
+	}
+
+	out := RenderTreeUsage(root, catalog, TreeOptions{TerminalWidth: termWidth})
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "app run") {
+			if got := runewidth.StringWidth(line); got > termWidth {
+				t.Fatalf("quickstart line width %d exceeds terminal width %d: %q", got, termWidth, line)
+			}
+			if !strings.HasSuffix(line, "...") {
+				t.Fatalf("expected clipped quickstart comment to end with '...': %q", line)
+			}
+		}
+	}
+}
+
+func TestRenderTreeUsageQuickstartNoComments(t *testing.T) {
+	root := buildSampleCommandHierarchy()
+	catalog := TechCatalog{
+		"app": {
+			Quickstart: []QuickstartItem{
+				{Command: "app start", Comment: ""},
+				{Command: "app stop", Comment: "   "},
+			},
+		},
+	}
+
+	out := RenderTreeUsage(root, catalog, TreeOptions{TerminalWidth: 200})
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "app start") || strings.Contains(line, "app stop") {
+			if strings.HasSuffix(line, " ") {
+				t.Errorf("line has trailing whitespace: %q", line)
+			}
+			if strings.Contains(line, "#") {
+				t.Errorf("line has comment marker when no comments were supplied: %q", line)
+			}
+		}
+	}
+}
+
+func TestRenderTreeUsageQuickstartBareHashComment(t *testing.T) {
+	root := buildSampleCommandHierarchy()
+	catalog := TechCatalog{
+		"app": {
+			Quickstart: []QuickstartItem{
+				{Command: "app start", Comment: "#"},
+				{Command: "app stop", Comment: "  #  "},
+			},
+		},
+	}
+
+	out := RenderTreeUsage(root, catalog, TreeOptions{TerminalWidth: 200})
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "app start") || strings.Contains(line, "app stop") {
+			if strings.HasSuffix(line, " ") {
+				t.Errorf("line has trailing whitespace: %q", line)
+			}
+			if strings.Contains(line, "#") {
+				t.Errorf("bare '#' comment should not emit comment: %q", line)
+			}
+		}
+	}
+}
+
+func TestRenderTreeUsageEnvironmentVariableWithoutDescription(t *testing.T) {
+	root := buildSampleCommandHierarchy()
+	create := findCommand(t, root, "app playlist create")
+	catalog := TechCatalog{
+		"app playlist create": {
+			Env: []EnvSpec{
+				{Name: "APP_SECRET", Description: ""},
+			},
+		},
+	}
+
+	out := RenderTreeUsage(create, catalog, TreeOptions{TerminalWidth: 200})
+	if !strings.Contains(out, "  APP_SECRET\n") {
+		t.Errorf("expected clean env var without trailing spaces, got:\n%s", out)
+	}
+}
+
+func TestRenderTreeUsageCJKAndEmoji(t *testing.T) {
+	root := buildSampleCommandHierarchy()
+	create := findCommand(t, root, "app playlist create")
+	catalog := TechCatalog{
+		"app playlist create": {
+			Env: []EnvSpec{
+				{Name: "日本語_ENV_EXTENDED_NAME", Description: "Japanese env"},
+			},
+			Quickstart: []QuickstartItem{
+				{Command: "app 🚀 start", Comment: "rocket launch"},
+				{Command: "app run", Comment: "plain run"},
+			},
+		},
+	}
+
+	out := RenderTreeUsage(create, catalog, TreeOptions{TerminalWidth: 200})
+
+	// CJK characters count as 2 terminal cells each
+	// "  日本語_ENV_EXTENDED_NAME" = 2 spaces + 6 cells (3 CJK chars * 2) + 18 ascii chars = 26 cells
+	// 26 cells + 2 padding = column 28
+	wantEnvCol := 28
+	if got := descColumn(out, "Japanese env"); got != wantEnvCol {
+		t.Errorf("expected CJK env var to start at column %d, got %d:\n%s", wantEnvCol, got, out)
+	}
+
+	// Alignments must measure cell widths correctly for emoji
+	rocketCol := descColumn(out, "# rocket launch")
+	runCol := descColumn(out, "# plain run")
+	if rocketCol != runCol {
+		t.Errorf("comments must align considering emoji cell width: rocket=%d, run=%d:\n%s", rocketCol, runCol, out)
+	}
+}

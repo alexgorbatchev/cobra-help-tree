@@ -5,10 +5,12 @@
 // help screen behind --help and the usage screen that follows a flag or argument
 // error, for a command and every descendant.
 //
-// Cobra has no field for describing a positional argument, so per-argument
-// descriptions come from a TechCatalog keyed on full command paths. Both modes
-// render them: as an "Arguments:" block sharing the command tree's description
-// column in human mode, and under an "args:" key in agent mode.
+// Cobra has no field for describing positional arguments or environment variables,
+// so descriptions for both come from a TechCatalog keyed on full command paths.
+// Both modes render them: as "Arguments:" and "Environment variables:" blocks
+// sharing the command tree's description column in human mode, and under "args:"
+// and "env:" keys in agent mode. Commands can also supply "quickstart" example
+// commands with automatically aligned inline comments.
 //
 // # Concurrency
 //
