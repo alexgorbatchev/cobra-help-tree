@@ -253,8 +253,8 @@ func TestRenderTreeUsageRendersEnvironmentVariables(t *testing.T) {
 
 	out := RenderTreeUsage(create, catalog, TreeOptions{TerminalWidth: 200})
 
-	if !strings.Contains(out, "\nEnvironment variables:\n") {
-		t.Fatalf("usage missing Environment variables section:\n%s", out)
+	if !strings.Contains(out, "\nEnvironment Variables:\n") {
+		t.Fatalf("usage missing Environment Variables section:\n%s", out)
 	}
 	for _, name := range []string{"APP_TOKEN", "APP_PORT"} {
 		if !strings.Contains(out, "\n  "+name) {

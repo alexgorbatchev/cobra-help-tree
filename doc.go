@@ -7,7 +7,7 @@
 //
 // Cobra has no field for describing positional arguments or environment variables,
 // so descriptions for both come from a TechCatalog keyed on full command paths.
-// Both modes render them: as "Arguments:" and "Environment variables:" blocks
+// Both modes render them: as "Arguments:" and "Environment Variables:" blocks
 // sharing the command tree's description column in human mode, and under "args:"
 // and "env:" keys in agent mode. Commands can also supply "quickstart" example
 // commands with automatically aligned inline comments.

@@ -29,7 +29,7 @@ func TestDemoRendersTheDocumentedScreens(t *testing.T) {
 		"Arguments:\n  <name>",
 		"[email]",
 		"Login name for the new user",
-		"Environment variables:\n  MYTOOL_DEFAULT_ROLE  Initial role assigned to new users",
+		"Environment Variables:\n  MYTOOL_DEFAULT_ROLE  Initial role assigned to new users",
 		"Quickstart:\n  mytool user create alice                # create user with default role\n  mytool user create bob bob@example.com  # create user and send invite",
 	} {
 		if !strings.Contains(out.String(), want) {

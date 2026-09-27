@@ -96,7 +96,7 @@ func RenderTreeUsage(cmd *cobra.Command, cat TechCatalog, opt TreeOptions) strin
 	}
 
 	if len(envs) > 0 {
-		sb.WriteString("\nEnvironment variables:\n")
+		sb.WriteString("\nEnvironment Variables:\n")
 		sb.WriteString(renderLabelRows(envs, descStartCol, opt, opt.TerminalWidth))
 	}
 

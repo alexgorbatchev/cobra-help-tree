@@ -29,7 +29,7 @@ A lightweight, zero-configuration Go library that replaces Cobra's default flat 
 
 - `Setup` installs a help function through Cobra's `SetHelpFunc` and a usage function through `SetUsageFunc`, both on the root command, which every subcommand inherits unless it sets its own. Cobra renders `--help` through the former and the screen that follows a flag or argument error through the latter, so replacing only one leaves the other printing Cobra's flat command list.
 - The two functions split the screen the way Cobra's own defaults do: `RenderTreeHelp` prints the long description and then the usage screen, `RenderTreeUsage` prints the usage screen alone, so an error does not repeat the whole command description.
-- Cobra has no field describing a positional argument or an environment variable — `Use` carries argument names as free text and `ValidArgs` is the enum of accepted values for the first positional argument — so descriptions for both come from a `TechCatalog` entry. Human mode renders them under `Arguments:` and `Environment variables:` and agent mode under `args:` and `env:`; a command's `ValidArgs` is reported separately under `valid_args:`, with the description Cobra packs behind a tab split off.
+- Cobra has no field describing a positional argument or an environment variable — `Use` carries argument names as free text and `ValidArgs` is the enum of accepted values for the first positional argument — so descriptions for both come from a `TechCatalog` entry. Human mode renders them under `Arguments:` and `Environment Variables:` and agent mode under `args:` and `env:`; a command's `ValidArgs` is reported separately under `valid_args:`, with the description Cobra packs behind a tab split off.
 - The arguments block, the command tree, and the environment variables block are measured together, so one description column runs down the whole screen.
 - Quickstart examples format with two-space indentation and align `#` comments to a shared column, clipping long comments against terminal width. Agent mode renders them under `quickstart:`.
 - `FormatCommandTree` walks `cmd.Commands()` recursively and records a branch prefix per node. Which commands count as listable is Cobra's own decision, `Command.IsAvailableCommand`, so hidden commands, deprecated commands, and commands that are neither runnable nor the parent of a runnable one are absent from the tree exactly as they are absent from Cobra's default help.
@@ -257,7 +257,7 @@ Arguments:
   <name>               Login name for the new user
   [email]              Address invitations are sent to
 
-Environment variables:
+Environment Variables:
   MYTOOL_DEFAULT_ROLE  Initial role assigned to new users
 
 Flags:

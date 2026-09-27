@@ -73,7 +73,7 @@ func argRows(args []ArgSpec) []labelRow {
 	return rows
 }
 
-// envLabelIndent anchors each environment variable under its "Environment variables:" heading.
+// envLabelIndent anchors each environment variable under its "Environment Variables:" heading.
 const envLabelIndent = "  "
 
 // envRows turns catalog environment variable specs into rows of the shared two-column block.
