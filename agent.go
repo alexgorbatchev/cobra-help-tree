@@ -148,7 +148,11 @@ func RenderAgentHelp(cmd *cobra.Command, cat TechCatalog, opt AgentOptions) stri
 		}
 	}
 
-	return clipLines(sb.String(), opt.MaxLineWidth)
+	screen := clipLines(sb.String(), opt.MaxLineWidth)
+	if opt.RequireSkill {
+		return fmt.Sprintf("ALERT: Agents must read `AGENT=1 %s skill` before using this tool.\n%s", cmd.Root().Name(), screen)
+	}
+	return screen
 }
 
 // agentListItem renders one entry of a nested agent-mode list. An entry without a

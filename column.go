@@ -61,7 +61,7 @@ func renderLabelRows(rows []labelRow, descStartCol int, opt TreeOptions, termWid
 		sb.WriteString("\n")
 	}
 
-	return sb.String()
+	return clipHumanLines(sb.String(), termWidth)
 }
 
 // clipDescription truncates a description that would run past termWidth when it

@@ -64,6 +64,10 @@ func (o TreeOptions) resolve() TreeOptions {
 // AgentOptions configures AGENT=1 rendering. It is what the agent renderer
 // accepts, mirroring TreeOptions for human mode.
 type AgentOptions struct {
+	// RequireSkill prefixes agent help and usage with the instruction to read
+	// AGENT=1 <root-command> skill. The caller supplies the embedded skill command.
+	RequireSkill bool
+
 	// MaxLineWidth clips each rendered line to this many terminal cells.
 	// Zero means unlimited, which is the default: agent output is machine-read,
 	// so full untruncated content is the contract and clipping is opt-in. Unlike

@@ -27,12 +27,16 @@ func GetTerminalWidth() int {
 	return 0
 }
 
-// effectiveTerminalWidth returns the column limit human output clips to: the
-// width the caller pinned, or the detected terminal width when the caller left
-// TerminalWidth unset.
+const fallbackTerminalWidth = 100
+
+// effectiveTerminalWidth returns the explicit or detected width, falling back
+// to 100 columns when neither reports a valid width.
 func effectiveTerminalWidth(opt TreeOptions) int {
 	if opt.TerminalWidth > 0 {
 		return opt.TerminalWidth
 	}
-	return GetTerminalWidth()
+	if width := GetTerminalWidth(); width > 0 {
+		return width
+	}
+	return fallbackTerminalWidth
 }

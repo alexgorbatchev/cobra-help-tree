@@ -19,6 +19,7 @@ func RenderTreeHelp(cmd *cobra.Command, cat TechCatalog, opt TreeOptions) string
 	if cmd == nil {
 		return ""
 	}
+	opt.TerminalWidth = effectiveTerminalWidth(opt)
 
 	var sb strings.Builder
 
@@ -32,7 +33,7 @@ func RenderTreeHelp(cmd *cobra.Command, cat TechCatalog, opt TreeOptions) string
 
 	sb.WriteString(RenderTreeUsage(cmd, cat, opt))
 
-	return sb.String()
+	return clipHumanLines(sb.String(), opt.TerminalWidth)
 }
 
 // RenderTreeUsage builds the screen cobra prints after a flag or argument error:
@@ -126,7 +127,7 @@ func RenderTreeUsage(cmd *cobra.Command, cat TechCatalog, opt TreeOptions) strin
 		sb.WriteString(fmt.Sprintf("\nUse %q for more information about a command.\n", cmd.CommandPath()+" [command] --help"))
 	}
 
-	return sb.String()
+	return clipHumanLines(sb.String(), opt.TerminalWidth)
 }
 
 const quickstartIndent = "  "

@@ -322,6 +322,7 @@ err := cobrahelptree.SetupWithOptions(rootCmd, cobrahelptree.HelpOptions{
     },
     Agent: cobrahelptree.AgentOptions{
         MaxLineWidth: 0, // Clip agent lines to N cells (0 = unlimited)
+        RequireSkill: true, // Direct agents to read the CLI's embedded skill
     },
     DisableAgent: false, // Set true to disable automatic AGENT=1 mode switching
 })
@@ -336,11 +337,14 @@ err := cobrahelptree.SetupWithOptions(rootCmd, cobrahelptree.HelpOptions{
 | `Tree.TerminalWidth` | `int` | `0` | Column limit for description clipping and flag wrapping; `0` detects the terminal |
 | `Tree.HideGeneratedCommands` | `bool` | `false` | Drop the completion command Cobra generates, and its shell subtree, from the human help screens. The default matches Cobra, which lists it. Agent mode is unaffected |
 | `Agent.MaxLineWidth` | `int` | `0` | Clip the value half of each agent-mode line to fit this many cells; `0` is unlimited |
+| `Agent.RequireSkill` | `bool` | `false` | Prefix agent help and usage with the instruction to read `AGENT=1 <root-command> skill`; the CLI supplies its embedded skill command |
 | `DisableAgent` | `bool` | `false` | Always render the human tree, ignoring `AGENT` |
 
 `TreeOptions` carries human-mode formatting and `AgentOptions` carries `AGENT=1` settings, so each renderer takes only the struct it reads. `HelpOptions` composes the two because `Setup` is the one caller that spans both modes.
 
-The two width fields are deliberately different. `Tree.TerminalWidth` defaults to auto-detecting the terminal, because human help must not wrap. `Agent.MaxLineWidth` defaults to unlimited and never auto-detects, because agent output is machine-read and full untruncated content is the contract; clipping is something a caller opts into.
+`Tree.TerminalWidth` detects terminal width when zero and falls back to 100 columns when stdout is not a terminal and `COLUMNS` supplies no valid width. Every human help and usage line is clipped to that budget, including prose, usage, long labels, examples and the navigation footer. Agent help retains full content by default; `Agent.MaxLineWidth` is an explicit clipping option and never detects terminal width.
+
+Set `Agent.RequireSkill` when the CLI ships a top-level embedded `skill` command. Every agent help and usage screen, including generated commands, begins with `ALERT: Agents must read \`AGENT=1 <root-command> skill\` before using this tool.` The alert remains intact even when `Agent.MaxLineWidth` is set. Human help and version output are unaffected.
 
 `Agent.MaxLineWidth` is a ceiling rather than a hard guarantee, because a clipped line still has to parse. Only the value half of a `key: value` line is shortened, block openers such as `metadata:` are never touched, and a line whose key leaves no room for a readable value is emitted in full. Clipping therefore never produces a truncated key or a key with nothing behind it:
 
