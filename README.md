@@ -8,6 +8,8 @@ A lightweight, zero-configuration Go library that replaces Cobra's default flat 
 - **Terminal Cell Alignment**: Measures display width in terminal cells rather than runes, so descriptions stay aligned when command names contain wide CJK characters or emoji.
 - **Dynamic Terminal Width Protection**: Detects terminal width and truncates descriptions with a trailing ellipsis (`...`) before line wrapping occurs.
 - **Native Dual-Mode (`AGENT=1`)**: Switches to token-conservative key-value help when `AGENT=1` is present, with the whole command tree as a nested list.
+- **Agent Skill Command**: Adds a `skill` command that prints your embedded `SKILL.md` byte for byte, and opens every `AGENT=1` screen with an alert sending agents to it.
+- **Skill Coverage Check**: Lists the commands, flags, arguments, and environment variables your skill fails to mention, so a test catches the guide falling behind the CLI.
 - **Documented Arguments & Environment Variables**: Renders per-argument and environment variable descriptions in both modes, in a column shared with the command tree, from a catalog keyed on command paths.
 - **Aligned Quickstart Invocations**: Formats example command lines and aligns inline comments with automatic `#` comment prefixing.
 - **Help on Stdout**: Writes requested help screens to stdout so `--help` survives pipes and redirection.
@@ -23,6 +25,8 @@ A lightweight, zero-configuration Go library that replaces Cobra's default flat 
 - Asking for help on a command group shows everything nested beneath it, not just the next level down.
 - Descriptions too long for the window are shortened with `...`, so lines never wrap and break the columns.
 - Setting `AGENT=1` swaps the decorated tree for compact output aimed at scripts and AI agents, which still lists every command below the one asked about.
+- Hand it the guide you wrote for AI agents and the CLI gains a `skill` command that prints it, while every agent-mode screen starts by telling the agent to read it.
+- One call in your tests names whatever that guide leaves out, so it cannot fall behind the commands and flags it describes.
 - Help lands on stdout, so it can be piped into a pager or saved to a file.
 
 # How it Really Works
@@ -38,6 +42,9 @@ A lightweight, zero-configuration Go library that replaces Cobra's default flat 
 - Column width is measured in terminal cells with `runewidth.StringWidth`, because a CJK ideograph or emoji is a single rune occupying two cells; rune counts would shift the description column.
 - Descriptions are clipped with `runewidth.Truncate` against the detected width, resolved from `$COLUMNS` first and then `term.GetSize` on the stdout file descriptor, falling back to no clipping when neither reports a size. Flag descriptions are wrapped to the same width so lines stay within terminal boundaries.
 - `RenderAgentHelp` emits `key: value` lines. Under `subcommands:` it lists the whole subtree, each group's commands indented two spaces beneath it, so one request for help describes everything the command offers. Caller-supplied `TechInfo.Metadata` is nested under its own `metadata:` key and sorted, so it cannot collide with a reserved key and renders byte-identically across runs.
+- `HelpOptions.Skill` makes `SetupWithOptions` add a `skill` command to the root with `AddCommand`, so Cobra lists, completes, and parses it like any other. The command takes no arguments and defines no flags, writes the string to `c.OutOrStdout()` unchanged in both modes, and returns a failed write as its error. `SetupWithOptions` returns an error and installs nothing when the command it is given is not the root or the root already has a command named or aliased `skill`.
+- A CLI carrying that command opens every agent-mode screen with ``ALERT: Agents must read `AGENT=1 <cli> skill` before using this tool.``, including the screens of Cobra's generated commands and the one printed after a flag or argument error. The alert is derived from the command tree rather than from the option, so it never names a command the binary lacks, and `Agent.MaxLineWidth` never clips it. Human screens and `--version` output are unchanged.
+- `SkillOmissions` walks the same commands help lists plus Cobra's generated `help` command, and reports each command path, flag, shorthand, catalog argument, and catalog environment variable the skill text does not contain. A flag or variable counts only where it stands as a whole word, so `--admin` is not found inside `--administrator`. It compares names, not meaning: a wrong type, default, or side effect in the guide passes. Like executing the CLI, it adds Cobra's generated commands and flags to the tree it is given.
 - Both renderers report the same flags for a command, combining its local and inherited sets rather than reading `cmd.Flags()`, which carries persistent flags only after Cobra has merged them.
 - Rendering mutates the command: Cobra's flag merge writes to the root and every ancestor, so the renderers are not safe to call concurrently on commands sharing a root. Commands installed through `Setup` are unaffected, because Cobra executes a command tree on one goroutine.
 
@@ -70,7 +77,7 @@ go get github.com/alexgorbatchev/cobra-help-tree/v2
 
 # Quick Start
 
-The hierarchy below is the one `examples/demo` builds, so every screen in this README can be reproduced with `just run` (human mode) or `just run-ai` (`AGENT=1`), passing any arguments through: `just run user create --help`.
+The hierarchy below is the one `examples/demo` builds, so every screen in this README can be reproduced with `just run` (human mode) or `just run-ai` (`AGENT=1`), passing any arguments through: `just run user create --help`. The demo also registers the catalog and the agent skill described further down, so its root screens carry one command more than this first example, `skill`.
 
 ```go
 package main
@@ -314,6 +321,85 @@ valid_args:
   - member
 ```
 
+### Agent Skill (`HelpOptions.Skill`)
+
+A skill is the usage guide an AI agent reads before driving your CLI: a `SKILL.md` that names every command, flag, argument, and environment variable. Embed it in the binary and pass it as `Skill`:
+
+```go
+import _ "embed"
+
+//go:embed SKILL.md
+var skill string
+
+if err := cobrahelptree.SetupWithOptions(rootCmd, cobrahelptree.HelpOptions{
+    Catalog: catalog,
+    Skill:   skill,
+}); err != nil {
+    return err
+}
+```
+
+The CLI gains a `skill` command that prints the file exactly as embedded, in both modes, and takes no arguments:
+
+```console
+$ mytool skill
+---
+name: mytool
+description: Use when running mytool, the cobra-help-tree demonstration CLI, to manage users and API tokens or to read its help screens.
+...
+```
+
+Every `AGENT=1` screen then opens with an alert that sends the agent to it, and the tree lists the new command:
+
+```yaml
+ALERT: Agents must read `AGENT=1 mytool skill` before using this tool.
+command: mytool
+summary: Multi-level CLI application
+description: mytool manages user accounts and their API tokens.
+usage: mytool [flags]
+subcommands:
+  - completion: Generate the autocompletion script for the specified shell
+    - bash: Generate the autocompletion script for bash
+    - fish: Generate the autocompletion script for fish
+    - powershell: Generate the autocompletion script for powershell
+    - zsh: Generate the autocompletion script for zsh
+  - skill: Print the usage guide for AI agents
+  - user: Manage user accounts
+    - create: Create a new user
+    - delete: Remove a user
+    - token: Manage API tokens for a user
+      - issue: Issue a new API token
+      - revoke: Revoke an existing API token
+  - version: Print the version and exit
+flags:
+  -c, --config string: Path to configuration file (default: "~/.config/mytool.yaml")
+  -h, --help bool: help for mytool (default: "false")
+```
+
+The alert is on every agent-mode screen, those of subcommands and of Cobra's generated commands included, and on the screen that follows a flag or argument error. Human screens and `--version` do not carry it. `Skill` belongs to the root command: `SetupWithOptions` returns an error when given any other command, or a root that already has a command named or aliased `skill`.
+
+Keep the guide complete with one test. `SkillOmissions` returns what the skill does not mention, and nothing when it mentions it all:
+
+```go
+func TestSkillCoversTheWholeInterface(t *testing.T) {
+    if missing := cobrahelptree.SkillOmissions(newRootCommand(), catalog, skill); len(missing) > 0 {
+        t.Errorf("SKILL.md does not mention:\n  %s", strings.Join(missing, "\n  "))
+    }
+}
+```
+
+A guide that had not yet caught up with a new `--admin` flag and its `-a` shorthand, a renamed argument, and Cobra's `help` command would fail with:
+
+```
+SKILL.md does not mention:
+  argument <name> of mytool user create
+  command mytool help
+  flag --admin
+  flag -a, the shorthand of --admin
+```
+
+The check covers every command help lists, by its full path, plus the `help` command Cobra generates; every flag of those commands with its shorthand, `--help` and the completion commands' `--no-descriptions` among them; and the arguments and environment variables in the catalog. It looks for names as whole words and does not judge what the guide says about them.
+
 # Configuration
 
 `Setup` applies the defaults. Use `SetupWithOptions` to customize rendering:
@@ -335,6 +421,7 @@ err := cobrahelptree.SetupWithOptions(rootCmd, cobrahelptree.HelpOptions{
         MaxLineWidth: 0, // Clip agent lines to N cells (0 = unlimited)
     },
     DisableAgent: false, // Set true to disable automatic AGENT=1 mode switching
+    Skill:        skill, // Embedded SKILL.md; adds the skill command and the agent alert
 })
 ```
 
@@ -348,6 +435,7 @@ err := cobrahelptree.SetupWithOptions(rootCmd, cobrahelptree.HelpOptions{
 | `Tree.HideGeneratedCommands` | `bool` | `false` | Drop the completion command Cobra generates, and its shell subtree, from the human help screens. The default matches Cobra, which lists it. Agent mode is unaffected |
 | `Agent.MaxLineWidth` | `int` | `0` | Clip the value half of each agent-mode line to fit this many cells; `0` is unlimited |
 | `DisableAgent` | `bool` | `false` | Always render the human tree, ignoring `AGENT` |
+| `Skill` | `string` | `""` | The CLI's guide for AI agents. When set, adds a `skill` command to the root that prints it byte for byte, and opens every `AGENT=1` screen with an alert naming that command |
 
 `TreeOptions` carries human-mode formatting and `AgentOptions` carries `AGENT=1` settings, so each renderer takes only the struct it reads. `HelpOptions` composes the two because `Setup` is the one caller that spans both modes.
 
@@ -393,11 +481,12 @@ Calls to `SetOut` on the root command redirect help output as usual.
 | Function | Purpose |
 | :--- | :--- |
 | `Setup(cmd) error` | Replace the help and usage screens of `cmd` and its descendants using the defaults; returns an error when `cmd` is nil |
-| `SetupWithOptions(cmd, opt) error` | The same from a `HelpOptions`; returns an error and installs nothing when `cmd` is nil or `opt` is invalid |
+| `SetupWithOptions(cmd, opt) error` | The same from a `HelpOptions`; returns an error and installs nothing when `cmd` is nil, `opt` is invalid, or `opt.Skill` is set and `cmd` cannot carry the `skill` command |
 | `FormatCommandTree(root, opt) string` | Render just the command tree from a `TreeOptions` |
 | `RenderTreeHelp(cmd, cat, opt) string` | Render a full human-mode help screen: the long description followed by the usage screen |
 | `RenderTreeUsage(cmd, cat, opt) string` | Render the human-mode usage screen alone, as printed after a flag or argument error |
 | `RenderAgentHelp(cmd, cat, opt) string` | Render the `AGENT=1` screen, used for both help and usage |
+| `SkillOmissions(root, cat, skill) []string` | List, sorted, the commands, flags, arguments, and environment variables below `root` that `skill` does not mention; `nil` when it mentions them all |
 | `TreeOptions.Validate() error` | Report the first invalid field in a `TreeOptions` |
 | `AgentOptions.Validate() error` | Report the first invalid field in an `AgentOptions` |
 | `HelpOptions.Validate() error` | Report the first invalid field, delegating to `Tree` then `Agent` |

@@ -7,6 +7,7 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"strings"
@@ -14,6 +15,13 @@ import (
 	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
 	"github.com/spf13/cobra"
 )
+
+// skill is the usage guide for AI agents. Embedding it puts the maintained file
+// itself into the binary, so `mytool skill` needs nothing on disk and there is no
+// second copy to keep in step.
+//
+//go:embed SKILL.md
+var skill string
 
 func main() {
 	root := newRootCommand()
@@ -44,9 +52,22 @@ func newRootCommand() *cobra.Command {
 	root.AddCommand(user)
 	root.AddCommand(&cobra.Command{Use: "version", Short: "Print the version and exit", Args: cobra.NoArgs, Run: report})
 
-	// Cobra has no field describing a positional argument, so the arguments each
-	// command takes are documented here and rendered in both modes.
-	catalog := cobrahelptree.TechCatalog{
+	// Skill adds the `skill` command and opens every AGENT=1 screen with an alert
+	// that sends the agent to it.
+	options := cobrahelptree.HelpOptions{Catalog: newCatalog(), Skill: skill}
+	if err := cobrahelptree.SetupWithOptions(root, options); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	return root
+}
+
+// newCatalog documents what cobra has no field for: the arguments each command
+// takes and the environment variables it reads. Both modes render it, and the
+// tests check the skill against it.
+func newCatalog() cobrahelptree.TechCatalog {
+	return cobrahelptree.TechCatalog{
 		"mytool user create": {
 			Args: []cobrahelptree.ArgSpec{
 				{Name: "<name>", Description: "Login name for the new user"},
@@ -77,13 +98,6 @@ func newRootCommand() *cobra.Command {
 			Args: []cobrahelptree.ArgSpec{{Name: "<token-id>", Description: "Token to invalidate immediately"}},
 		},
 	}
-
-	if err := cobrahelptree.SetupWithOptions(root, cobrahelptree.HelpOptions{Catalog: catalog}); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-
-	return root
 }
 
 // report echoes the invocation rather than touching any real account, which is

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
 )
 
 // The demo is what `just run` drives and what the README's screens are generated
@@ -60,6 +62,54 @@ func TestDemoRendersAgentHelp(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("agent help screen missing %q:\n%s", want, out.String())
 		}
+	}
+}
+
+func TestDemoPrintsItsSkill(t *testing.T) {
+	for _, agentEnv := range []string{"0", "1"} {
+		t.Run("AGENT="+agentEnv, func(t *testing.T) {
+			t.Setenv("AGENT", agentEnv)
+
+			root := newRootCommand()
+			out := new(bytes.Buffer)
+			root.SetOut(out)
+			root.SetErr(out)
+			root.SetArgs([]string{"skill"})
+
+			if err := root.Execute(); err != nil {
+				t.Fatalf("skill: %v", err)
+			}
+			if out.String() != skill {
+				t.Errorf("skill printed something other than the embedded SKILL.md:\n%s", out.String())
+			}
+		})
+	}
+}
+
+func TestDemoAgentHelpOpensWithTheSkillAlert(t *testing.T) {
+	t.Setenv("AGENT", "1")
+
+	root := newRootCommand()
+	out := new(bytes.Buffer)
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"user", "--help"})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("user --help (agent): %v", err)
+	}
+
+	want := "ALERT: Agents must read `AGENT=1 mytool skill` before using this tool.\ncommand: mytool user\n"
+	if !strings.HasPrefix(out.String(), want) {
+		t.Errorf("agent help does not open with %q:\n%s", want, out.String())
+	}
+}
+
+// The skill is the reference an agent works from, so a command, flag, argument
+// or environment variable the demo gains has to reach it in the same change.
+func TestDemoSkillCoversTheWholeInterface(t *testing.T) {
+	if missing := cobrahelptree.SkillOmissions(newRootCommand(), newCatalog(), skill); len(missing) > 0 {
+		t.Errorf("SKILL.md does not mention:\n  %s", strings.Join(missing, "\n  "))
 	}
 }
 

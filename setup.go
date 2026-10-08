@@ -32,6 +32,15 @@ func SetupWithOptions(cmd *cobra.Command, opt HelpOptions) error {
 	if err := opt.Validate(); err != nil {
 		return err
 	}
+	if opt.Skill != "" {
+		if err := checkSkillTarget(cmd); err != nil {
+			return err
+		}
+		// Added to the tree rather than handled inside the help funcs, so the command
+		// is listed, completed and parsed like any other, and the agent renderer
+		// finds it there when deciding whether to print the alert.
+		cmd.AddCommand(newSkillCommand(opt.Skill))
+	}
 
 	agentMode := func() bool { return !opt.DisableAgent && IsAgentMode() }
 

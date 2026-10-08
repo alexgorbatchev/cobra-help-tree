@@ -16,6 +16,11 @@
 // branches in human mode, and as a nested list under "subcommands:" in agent
 // mode.
 //
+// HelpOptions.Skill takes the CLI's embedded guide for AI agents. Setup then adds
+// a "skill" command that prints it unchanged, and every agent-mode screen opens
+// with an alert naming that command. SkillOmissions reports what such a guide
+// fails to mention, for a test that keeps it in step with the CLI.
+//
 // # Concurrency
 //
 // The renderers are not safe to call concurrently on commands that share a root.

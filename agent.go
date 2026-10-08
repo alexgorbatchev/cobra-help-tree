@@ -137,7 +137,9 @@ func RenderAgentHelp(cmd *cobra.Command, cat TechCatalog, opt AgentOptions) stri
 		}
 	}
 
-	return clipLines(sb.String(), opt.MaxLineWidth)
+	// The alert is joined on after clipping. It tells the agent which command to
+	// run first, and a clipped line would cut that command short.
+	return skillAlert(cmd) + clipLines(sb.String(), opt.MaxLineWidth)
 }
 
 // agentSubcommands renders every command below parent as a nested list: one
