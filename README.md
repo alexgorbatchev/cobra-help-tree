@@ -9,7 +9,7 @@ A lightweight, zero-configuration Go library that replaces Cobra's default flat 
 - **Dynamic Terminal Width Protection**: Detects terminal width and truncates descriptions with a trailing ellipsis (`...`) before line wrapping occurs.
 - **Native Dual-Mode (`AGENT=1`)**: Switches to token-conservative key-value help when `AGENT=1` is present, with the whole command tree as a nested list.
 - **Agent Skill Command**: Adds a `skill` command that prints your embedded `SKILL.md` byte for byte, and opens every `AGENT=1` screen with an alert sending agents to it.
-- **Skill Coverage Check**: Lists the commands, flags, arguments, and environment variables your skill fails to mention, so a test catches the guide falling behind the CLI.
+- **Skill Coverage Check**: Lists the commands, flags, arguments, and environment variables your skill fails to mention, and the flags whose type or default it does not state, so a test catches the guide falling behind the CLI.
 - **Documented Arguments & Environment Variables**: Renders per-argument and environment variable descriptions in both modes, in a column shared with the command tree, from a catalog keyed on command paths.
 - **Aligned Quickstart Invocations**: Formats example command lines and aligns inline comments with automatic `#` comment prefixing.
 - **Help on Stdout**: Writes requested help screens to stdout so `--help` survives pipes and redirection.
@@ -38,13 +38,13 @@ A lightweight, zero-configuration Go library that replaces Cobra's default flat 
 - Quickstart examples format with two-space indentation and align `#` comments to a shared column, clipping long comments against terminal width. Agent mode renders them under `quickstart:`.
 - `FormatCommandTree` walks `cmd.Commands()` recursively and records a branch prefix per node. Which commands count as listable is Cobra's own decision, `Command.IsAvailableCommand`, so hidden commands, deprecated commands, and commands that are neither runnable nor the parent of a runnable one are absent from the tree exactly as they are absent from Cobra's default help.
 - A deprecated command is listed nowhere, which is Cobra's behaviour, so its own help screen is the one place it can still be announced: `RenderTreeUsage` prints `Deprecated: <your message>` above the usage block and agent mode reports a `deprecated:` key. Cobra prints the same string, but only once the command has already run.
-- Cobra's generated `help` command is absent for the same reason: `IsAvailableCommand` excludes it by identity (`Parent().helpCommand == c`), and only Cobra's help *template* re-adds it by name, which this library does not do. The generated `completion` command is listed by default, as Cobra lists it; `TreeOptions.HideGeneratedCommands` drops it from the human screens. That filter is aimed at a command named `completion` directly under the root, which is the only place Cobra generates one — `InitDefaultCompletionCmd` returns early when a root child already uses that name — so a `completion` command of your own deeper in the tree is never mistaken for Cobra's.
+- Cobra's generated `help` command is absent for the same reason: `IsAvailableCommand` excludes it by identity (`Parent().helpCommand == c`), and only Cobra's help *template* re-adds it by name, which this library does not do. The generated `completion` command is listed by default, as Cobra lists it; `TreeOptions.HideGeneratedCommands` drops it from the human screens, together with the `skill` command that `HelpOptions.Skill` adds. That filter is aimed at a command named `completion` directly under the root, which is the only place Cobra generates one — `InitDefaultCompletionCmd` returns early when a root child already uses that name — so a `completion` command of your own deeper in the tree is never mistaken for Cobra's.
 - Column width is measured in terminal cells with `runewidth.StringWidth`, because a CJK ideograph or emoji is a single rune occupying two cells; rune counts would shift the description column.
-- Descriptions are clipped with `runewidth.Truncate` against the detected width, resolved from `$COLUMNS` first and then `term.GetSize` on the stdout file descriptor, falling back to no clipping when neither reports a size. Flag descriptions are wrapped to the same width so lines stay within terminal boundaries.
-- `RenderAgentHelp` emits `key: value` lines. Under `subcommands:` it lists the whole subtree, each group's commands indented two spaces beneath it, so one request for help describes everything the command offers. Caller-supplied `TechInfo.Metadata` is nested under its own `metadata:` key and sorted, so it cannot collide with a reserved key and renders byte-identically across runs.
+- Descriptions are clipped with `runewidth.Truncate` against the detected width, resolved from `$COLUMNS` first and then `term.GetSize` on the stdout file descriptor, falling back to no clipping when neither reports a size. Flag descriptions are wrapped to the same width so lines stay within terminal boundaries, and so is the closing `Use "... --help"` hint, between words: clipping it would cut the instruction short.
+- `RenderAgentHelp` emits `key: value` lines. Under `subcommands:` it lists the whole subtree, each group's commands indented two spaces beneath it, so one request for help describes everything the command offers. An entry is the command's `Use`, arguments included. The `usage:` line ends in `[command]` whenever the command has subcommands, as the human usage line does, and a flag's default is printed only when pflag would print it, which leaves out the zero value of the flag's type. Caller-supplied `TechInfo.Metadata` is nested under its own `metadata:` key and sorted, so it cannot collide with a reserved key and renders byte-identically across runs.
 - `HelpOptions.Skill` makes `SetupWithOptions` add a `skill` command to the root with `AddCommand`, so Cobra lists, completes, and parses it like any other. The command takes no arguments and defines no flags, writes the string to `c.OutOrStdout()` unchanged in both modes, and returns a failed write as its error. `SetupWithOptions` returns an error and installs nothing when the command it is given is not the root or the root already has a command named or aliased `skill`.
 - A CLI carrying that command opens every agent-mode screen with ``ALERT: Agents must read `AGENT=1 <cli> skill` before using this tool.``, including the screens of Cobra's generated commands and the one printed after a flag or argument error. The alert is derived from the command tree rather than from the option, so it never names a command the binary lacks, and `Agent.MaxLineWidth` never clips it. Human screens and `--version` output are unchanged.
-- `SkillOmissions` walks the same commands help lists plus Cobra's generated `help` command, and reports each command path, flag, shorthand, catalog argument, and catalog environment variable the skill text does not contain. A flag or variable counts only where it stands as a whole word, so `--admin` is not found inside `--administrator`. It compares names, not meaning: a wrong type, default, or side effect in the guide passes. Like executing the CLI, it adds Cobra's generated commands and flags to the tree it is given.
+- `SkillOmissions` walks the same commands help lists plus Cobra's generated `help` command, and reports each command path, flag, shorthand, catalog argument, and catalog environment variable the skill text does not contain. A flag or variable counts only where it stands as a whole word, so `--admin` is not found inside `--administrator`. For a flag the skill names, some line naming it must also state its type as pflag reports it (`bool`, `string`, `int`, `duration`, in any letter case) and its default when that differs from the type's zero value; a flag named nowhere is reported once, not three times. What the guide says beyond that, a side effect or an error for instance, is not judged. Like executing the CLI, it adds Cobra's generated commands and flags to the tree it is given.
 - Both renderers report the same flags for a command, combining its local and inherited sets rather than reading `cmd.Flags()`, which carries persistent flags only after Cobra has merged them.
 - Rendering mutates the command: Cobra's flag merge writes to the root and every ancestor, so the renderers are not safe to call concurrently on commands sharing a root. Commands installed through `Setup` are unaffected, because Cobra executes a command tree on one goroutine.
 
@@ -203,7 +203,7 @@ The same command under `AGENT=1` drops padding, glyphs, and dividers in favour o
 command: mytool
 summary: Multi-level CLI application
 description: mytool manages user accounts and their API tokens.
-usage: mytool [flags]
+usage: mytool [flags] [command]
 subcommands:
   - completion: Generate the autocompletion script for the specified shell
     - bash: Generate the autocompletion script for bash
@@ -211,18 +211,18 @@ subcommands:
     - powershell: Generate the autocompletion script for powershell
     - zsh: Generate the autocompletion script for zsh
   - user: Manage user accounts
-    - create: Create a new user
-    - delete: Remove a user
+    - create <name>: Create a new user
+    - delete <id>: Remove a user
     - token: Manage API tokens for a user
-      - issue: Issue a new API token
-      - revoke: Revoke an existing API token
+      - issue <user-id>: Issue a new API token
+      - revoke <token-id>: Revoke an existing API token
   - version: Print the version and exit
 flags:
   -c, --config string: Path to configuration file (default: "~/.config/mytool.yaml")
-  -h, --help bool: help for mytool (default: "false")
+  -h, --help bool: help for mytool
 ```
 
-Help on a group lists that group's subtree the same way, starting from its own commands.
+Help on a group lists that group's subtree the same way, starting from its own commands. Each entry carries the command's arguments, as its branch in the tree does, and the `usage:` line ends in `[command]` when there are subcommands to choose from. A flag's default is stated only when it differs from the zero value of its type, the rule the human screen follows: `--help` is a `bool` that is off unless given, so it has none.
 
 `HideGeneratedCommands` does not apply here. Agent output describes the interface the binary accepts, and `completion` is a command it accepts, so agent mode always reports Cobra's own availability verdict.
 
@@ -307,7 +307,7 @@ metadata:
   usage: 1 write per call
 flags:
   -c, --config string: Path to configuration file (default: "~/.config/mytool.yaml")
-  -h, --help bool: help for create (default: "false")
+  -h, --help bool: help for create
 quickstart:
   - mytool user create alice: create user with default role
   - mytool user create bob bob@example.com: create user and send invite
@@ -356,7 +356,7 @@ ALERT: Agents must read `AGENT=1 mytool skill` before using this tool.
 command: mytool
 summary: Multi-level CLI application
 description: mytool manages user accounts and their API tokens.
-usage: mytool [flags]
+usage: mytool [flags] [command]
 subcommands:
   - completion: Generate the autocompletion script for the specified shell
     - bash: Generate the autocompletion script for bash
@@ -365,18 +365,18 @@ subcommands:
     - zsh: Generate the autocompletion script for zsh
   - skill: Print the usage guide for AI agents
   - user: Manage user accounts
-    - create: Create a new user
-    - delete: Remove a user
+    - create <name>: Create a new user
+    - delete <id>: Remove a user
     - token: Manage API tokens for a user
-      - issue: Issue a new API token
-      - revoke: Revoke an existing API token
+      - issue <user-id>: Issue a new API token
+      - revoke <token-id>: Revoke an existing API token
   - version: Print the version and exit
 flags:
   -c, --config string: Path to configuration file (default: "~/.config/mytool.yaml")
-  -h, --help bool: help for mytool (default: "false")
+  -h, --help bool: help for mytool
 ```
 
-The alert is on every agent-mode screen, those of subcommands and of Cobra's generated commands included, and on the screen that follows a flag or argument error. Human screens and `--version` do not carry it. `Skill` belongs to the root command: `SetupWithOptions` returns an error when given any other command, or a root that already has a command named or aliased `skill`.
+The alert is on every agent-mode screen, those of subcommands and of Cobra's generated commands included, and on the screen that follows a flag or argument error. Human screens and `--version` do not carry it. `Skill` belongs to the root command: `SetupWithOptions` returns an error when given any other command, or a root that already has a command named or aliased `skill`. `TreeOptions.HideGeneratedCommands` keeps the `skill` command out of the human screens along with `completion`; it still runs, and agent mode still lists it.
 
 Keep the guide complete with one test. `SkillOmissions` returns what the skill does not mention, and nothing when it mentions it all:
 
@@ -388,17 +388,18 @@ func TestSkillCoversTheWholeInterface(t *testing.T) {
 }
 ```
 
-A guide that had not yet caught up with a new `--admin` flag and its `-a` shorthand, a renamed argument, and Cobra's `help` command would fail with:
+A guide that had not yet caught up with a new `--admin` flag and its `-a` shorthand, a renamed argument, a new `--config` default, and Cobra's `help` command would fail with:
 
 ```
 SKILL.md does not mention:
   argument <name> of mytool user create
   command mytool help
   flag --admin
+  flag --config: its default "~/.config/mytool.yaml" is not stated on a line that names it
   flag -a, the shorthand of --admin
 ```
 
-The check covers every command help lists, by its full path, plus the `help` command Cobra generates; every flag of those commands with its shorthand, `--help` and the completion commands' `--no-descriptions` among them; and the arguments and environment variables in the catalog. It looks for names as whole words and does not judge what the guide says about them.
+The check covers every command help lists, by its full path, plus the `help` command Cobra generates; every flag of those commands with its shorthand, `--help` and the completion commands' `--no-descriptions` among them; and the arguments and environment variables in the catalog. Names are matched as whole words. A flag the guide names must also have its type (`bool`, `string`, `int`, and so on) and any default that is not the zero value of that type on a line that names it, so a flag whose type or default changes fails the test until that line is corrected.
 
 # Configuration
 
@@ -413,8 +414,9 @@ err := cobrahelptree.SetupWithOptions(rootCmd, cobrahelptree.HelpOptions{
         MinLabelWidth: 12,    // Cells reserved for the command and argument columns
         TerminalWidth: 100,   // Manual column width limit (0 = auto-detect)
 
-        // Set true to drop the completion command cobra generates, and its shell
-        // subtree, from the human help screens. The default lists it, as cobra does.
+        // Set true to drop the commands the CLI did not define from the human help
+        // screens: cobra's completion command with its shell subtree, and the skill
+        // command. The default lists them.
         HideGeneratedCommands: false,
     },
     Agent: cobrahelptree.AgentOptions{
@@ -432,7 +434,7 @@ err := cobrahelptree.SetupWithOptions(rootCmd, cobrahelptree.HelpOptions{
 | `Tree.MinPadding` | `int` | `2` | Minimum cells between the label column and the description column |
 | `Tree.MinLabelWidth` | `int` | `20` | Minimum cells reserved for the command and argument columns, so narrow screens keep a stable description column |
 | `Tree.TerminalWidth` | `int` | `0` | Column limit for description clipping and flag wrapping; `0` detects the terminal |
-| `Tree.HideGeneratedCommands` | `bool` | `false` | Drop the completion command Cobra generates, and its shell subtree, from the human help screens. The default matches Cobra, which lists it. Agent mode is unaffected |
+| `Tree.HideGeneratedCommands` | `bool` | `false` | Drop the commands the CLI did not define from the human help screens: the completion command Cobra generates, with its shell subtree, and the `skill` command. The default lists them. Agent mode is unaffected |
 | `Agent.MaxLineWidth` | `int` | `0` | Clip the value half of each agent-mode line to fit this many cells; `0` is unlimited |
 | `DisableAgent` | `bool` | `false` | Always render the human tree, ignoring `AGENT` |
 | `Skill` | `string` | `""` | The CLI's guide for AI agents. When set, adds a `skill` command to the root that prints it byte for byte, and opens every `AGENT=1` screen with an alert naming that command |
@@ -486,7 +488,7 @@ Calls to `SetOut` on the root command redirect help output as usual.
 | `RenderTreeHelp(cmd, cat, opt) string` | Render a full human-mode help screen: the long description followed by the usage screen |
 | `RenderTreeUsage(cmd, cat, opt) string` | Render the human-mode usage screen alone, as printed after a flag or argument error |
 | `RenderAgentHelp(cmd, cat, opt) string` | Render the `AGENT=1` screen, used for both help and usage |
-| `SkillOmissions(root, cat, skill) []string` | List, sorted, the commands, flags, arguments, and environment variables below `root` that `skill` does not mention; `nil` when it mentions them all |
+| `SkillOmissions(root, cat, skill) []string` | List, sorted, the commands, flags, arguments, and environment variables below `root` that `skill` does not mention, and the flags whose type or default it does not state; `nil` when nothing is missing |
 | `TreeOptions.Validate() error` | Report the first invalid field in a `TreeOptions` |
 | `AgentOptions.Validate() error` | Report the first invalid field in an `AgentOptions` |
 | `HelpOptions.Validate() error` | Report the first invalid field, delegating to `Tree` then `Agent` |
