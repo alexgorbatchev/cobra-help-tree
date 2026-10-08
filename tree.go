@@ -59,15 +59,17 @@ const completionCommandName = "completion"
 // excludes it by identity, and only cobra's help template re-adds it by name, so
 // it is absent here without any filtering of ours.
 //
-// hideGenerated additionally drops the generated completion command, which cobra
-// does list. It is off by default, so the default screen matches cobra's.
+// hideGenerated additionally drops the commands the CLI did not define itself:
+// the completion command cobra generates, which cobra does list, and the skill
+// command this library adds. It is off by default, so the default screen lists
+// every command the binary accepts.
 func visibleSubcommands(cmd *cobra.Command, hideGenerated bool) []*cobra.Command {
 	var visible []*cobra.Command
 	for _, c := range cmd.Commands() {
 		if !c.IsAvailableCommand() {
 			continue
 		}
-		if hideGenerated && isGeneratedCompletionCommand(c) {
+		if hideGenerated && (isGeneratedCompletionCommand(c) || isSkillCommand(c)) {
 			continue
 		}
 		visible = append(visible, c)

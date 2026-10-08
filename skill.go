@@ -188,9 +188,15 @@ func continuesName(r rune, present bool) bool {
 func skillAlert(cmd *cobra.Command) string {
 	root := cmd.Root()
 	for _, sub := range root.Commands() {
-		if _, marked := sub.Annotations[skillAnnotation]; marked {
+		if isSkillCommand(sub) {
 			return fmt.Sprintf("ALERT: Agents must read `AGENT=1 %s %s` before using this tool.\n", root.CommandPath(), skillCommandName)
 		}
 	}
 	return ""
+}
+
+// isSkillCommand reports whether cmd is the skill command this library added.
+func isSkillCommand(cmd *cobra.Command) bool {
+	_, marked := cmd.Annotations[skillAnnotation]
+	return marked
 }

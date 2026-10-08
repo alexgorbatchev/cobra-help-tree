@@ -17,13 +17,16 @@ type TreeOptions struct {
 	MinLabelWidth int  // Minimum cells reserved for the command and argument columns before padding (0 = 20)
 	TerminalWidth int  // Max line width before clipping descriptions with '...' and wrapping flags (0 = auto-detect)
 
-	// HideGeneratedCommands drops the completion command cobra generates, and its
-	// per-shell subtree, from the human help screens.
+	// HideGeneratedCommands drops the commands the CLI did not define itself from
+	// the human help screens: the completion command cobra generates, with its
+	// per-shell subtree, and the skill command HelpOptions.Skill adds. Both still
+	// run when invoked.
 	//
-	// The zero value keeps it, which is what cobra's own help does. Set this when
-	// the tree should show only the commands the CLI itself defines: the generated
-	// command arrives with four shell children, so it costs five lines above the
-	// CLI's first real command in a format whose purpose is a readable hierarchy.
+	// The zero value keeps them, which for completion is what cobra's own help
+	// does. Set this when the tree should show only the commands the CLI itself
+	// defines: the completion command arrives with four shell children, so it
+	// costs five lines above the CLI's first real command in a format whose purpose
+	// is a readable hierarchy, and the skill command is one a person has no use for.
 	//
 	// It is human-mode formatting, so it does not apply to agent mode, where the
 	// contract is a full description of the interface the binary accepts.
