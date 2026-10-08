@@ -73,10 +73,16 @@ func newSkillCommand(skill string) *cobra.Command {
 // environment variables the catalog documents. Hidden and deprecated commands and
 // hidden flags are left out, as they are left out of help.
 //
-// It checks that a name appears, not what is said about it: a type, a default or
-// a side effect described wrongly is beyond a comparison of names. A flag or
-// variable counts as mentioned only where it stands as a whole word, so "--admin"
-// is not found inside "--administrator" and "-c" is not found inside "--config".
+// A name counts as mentioned only where it stands as a whole word, so "--admin" is
+// not found inside "--administrator" and "-c" is not found inside "--config".
+//
+// A flag the skill names must also have its type stated, and its default when it
+// has one, on a line that names the flag: the type as pflag reports it ("bool",
+// "string", "int", "duration" and so on, in any letter case) and the default as
+// pflag prints it, each as a whole word. A flag retyped or given a new default
+// then fails until its line is corrected. A default equal to the type's zero
+// value is not asked for, as help does not print it. What the skill says beyond
+// that, a side effect or an error for instance, is not judged.
 //
 // It mutates root the way executing the CLI does, by adding cobra's generated
 // commands and flags, and the package Concurrency note applies.
@@ -90,6 +96,7 @@ func SkillOmissions(root *cobra.Command, cat TechCatalog, skill string) []string
 	root.InitDefaultHelpCmd()
 	root.InitDefaultCompletionCmd()
 
+	lines := strings.Split(skill, "\n")
 	omissions := map[string]struct{}{}
 
 	var visit func(cmd *cobra.Command)
@@ -109,11 +116,34 @@ func SkillOmissions(root *cobra.Command, cat TechCatalog, skill string) []string
 			if f.Hidden {
 				return
 			}
-			if !mentionsWord(skill, "--"+f.Name) {
-				omissions["flag --"+f.Name] = struct{}{}
-			}
+			long := "--" + f.Name
 			if f.Shorthand != "" && !mentionsWord(skill, "-"+f.Shorthand) {
-				omissions[fmt.Sprintf("flag -%s, the shorthand of --%s", f.Shorthand, f.Name)] = struct{}{}
+				omissions[fmt.Sprintf("flag -%s, the shorthand of %s", f.Shorthand, long)] = struct{}{}
+			}
+
+			// The lines naming the flag are where a reader looks for its type and
+			// default. A flag named nowhere is one omission, not three.
+			var naming []string
+			for _, line := range lines {
+				if mentionsWord(line, long) {
+					naming = append(naming, line)
+				}
+			}
+			if len(naming) == 0 {
+				omissions["flag "+long] = struct{}{}
+				return
+			}
+
+			typeName := f.Value.Type()
+			if !slices.ContainsFunc(naming, func(line string) bool {
+				return mentionsWord(strings.ToLower(line), strings.ToLower(typeName))
+			}) {
+				omissions[fmt.Sprintf("flag %s: its type %s is not stated on a line that names it", long, typeName)] = struct{}{}
+			}
+			if hasNonZeroDefault(f) && !slices.ContainsFunc(naming, func(line string) bool {
+				return mentionsWord(line, f.DefValue)
+			}) {
+				omissions[fmt.Sprintf("flag %s: its default %q is not stated on a line that names it", long, f.DefValue)] = struct{}{}
 			}
 		})
 

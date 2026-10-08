@@ -347,6 +347,7 @@ func buildSkillFixture() (*cobra.Command, TechCatalog) {
 
 	create := leafCommand("create <name>", "Create a user")
 	create.Flags().Bool("admin", false, "Grant admin rights")
+	create.Flags().Int("quota", 5, "Disk quota in GB")
 	create.Flags().String("trace", "", "Internal tracing")
 	// MarkHidden fails only for a flag that does not exist, and this one was just defined.
 	_ = create.Flags().MarkHidden("trace")
@@ -373,18 +374,20 @@ func buildSkillFixture() (*cobra.Command, TechCatalog) {
 }
 
 // completeSkillLines is a skill that mentions the whole interface of the fixture,
-// one mention per line so a test can take any one of them away.
+// one mention per line so a test can take any one of them away. Each flag is
+// named on a line that also states its type and, where it has one, its default.
 var completeSkillLines = []string{
 	"# app",
 	"Run app user create <name> to add a user.",
-	"Pass --admin to grant admin rights.",
+	"Pass --admin (bool) to grant admin rights.",
+	"Limit storage with --quota (int, default 5).",
 	"Set APP_ROLE to choose the role.",
-	"Every command accepts --config (-c)",
-	"and --help (-h).",
+	"Every command accepts --config (-c, string)",
+	"and --help (-h, bool).",
 	"app help prints the help of a command.",
 	"app completion bash, app completion fish,",
 	"app completion powershell and",
-	"app completion zsh print a shell script; --no-descriptions shortens it.",
+	"app completion zsh print a shell script; --no-descriptions (bool) shortens it.",
 }
 
 func TestSkillOmissions(t *testing.T) {
@@ -413,6 +416,7 @@ func TestSkillOmissions(t *testing.T) {
 			"flag --config",
 			"flag --help",
 			"flag --no-descriptions",
+			"flag --quota",
 			"flag -c, the shorthand of --config",
 			"flag -h, the shorthand of --help",
 		}
@@ -421,22 +425,38 @@ func TestSkillOmissions(t *testing.T) {
 		}
 	})
 
-	// Each case rewrites one line of the complete skill and names the one omission
-	// that follows from it.
+	const (
+		adminLine  = "Pass --admin (bool) to grant admin rights."
+		quotaLine  = "Limit storage with --quota (int, default 5)."
+		configLine = "Every command accepts --config (-c, string)"
+		zshLine    = "app completion zsh print a shell script; --no-descriptions (bool) shortens it."
+
+		quotaTypeOmission    = "flag --quota: its type int is not stated on a line that names it"
+		quotaDefaultOmission = `flag --quota: its default "5" is not stated on a line that names it`
+	)
+
+	// Each case rewrites one line of the complete skill and names the omissions
+	// that follow from it.
 	tests := []struct {
 		name    string
 		line    string
 		rewrite string
-		want    string
+		want    []string
 	}{
-		{"a command", "app completion zsh print a shell script; --no-descriptions shortens it.", "--no-descriptions shortens it.", "command app completion zsh"},
-		{"the generated help command", "app help prints the help of a command.", "", "command app help"},
-		{"a flag", "Pass --admin to grant admin rights.", "", "flag --admin"},
-		{"a flag named only inside a longer one", "Pass --admin to grant admin rights.", "Pass --administrator to grant admin rights.", "flag --admin"},
-		{"a shorthand", "Every command accepts --config (-c)", "Every command accepts --config", "flag -c, the shorthand of --config"},
-		{"a shorthand named only as the start of a word", "Every command accepts --config (-c)", "Every command accepts --config (-cfg)", "flag -c, the shorthand of --config"},
-		{"an argument", "Run app user create <name> to add a user.", "Run app user create NAME to add a user.", "argument <name> of app user create"},
-		{"an environment variable", "Set APP_ROLE to choose the role.", "Set APP_ROLES to choose the role.", "environment variable APP_ROLE"},
+		{"a command", zshLine, "--no-descriptions (bool) shortens it.", []string{"command app completion zsh"}},
+		{"the generated help command", "app help prints the help of a command.", "", []string{"command app help"}},
+		{"a flag", adminLine, "", []string{"flag --admin"}},
+		{"a flag named only inside a longer one", adminLine, "Pass --administrator (bool) to grant admin rights.", []string{"flag --admin"}},
+		{"a shorthand", configLine, "Every command accepts --config (string)", []string{"flag -c, the shorthand of --config"}},
+		{"a shorthand named only as the start of a word", configLine, "Every command accepts --config (-cfg, string)", []string{"flag -c, the shorthand of --config"}},
+		{"an argument", "Run app user create <name> to add a user.", "Run app user create NAME to add a user.", []string{"argument <name> of app user create"}},
+		{"an environment variable", "Set APP_ROLE to choose the role.", "Set APP_ROLES to choose the role.", []string{"environment variable APP_ROLE"}},
+		{"the type of a flag", adminLine, "Pass --admin to grant admin rights.", []string{"flag --admin: its type bool is not stated on a line that names it"}},
+		{"the right type of a flag", quotaLine, "Limit storage with --quota (string, default 5).", []string{quotaTypeOmission}},
+		{"a type written inside a longer word", quotaLine, "Limit storage with --quota (integer, default 5).", []string{quotaTypeOmission}},
+		{"the default of a flag", quotaLine, "Limit storage with --quota (int).", []string{quotaDefaultOmission}},
+		{"the right default of a flag", quotaLine, "Limit storage with --quota (int, default 50).", []string{quotaDefaultOmission}},
+		{"a type and default stated on another line", quotaLine, "Limit storage with --quota.\nIt is an int and defaults to 5.", []string{quotaDefaultOmission, quotaTypeOmission}},
 	}
 
 	for _, tt := range tests {
@@ -451,11 +471,22 @@ func TestSkillOmissions(t *testing.T) {
 			lines[at] = tt.rewrite
 
 			got := SkillOmissions(root, catalog, strings.Join(lines, "\n"))
-			if !slices.Equal(got, []string{tt.want}) {
-				t.Errorf("SkillOmissions = %q, want only %q", got, tt.want)
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("SkillOmissions = %q, want %q", got, tt.want)
 			}
 		})
 	}
+
+	t.Run("a type in another letter case and a second line naming the flag both count", func(t *testing.T) {
+		root, catalog := buildSkillFixture()
+
+		lines := slices.Clone(completeSkillLines)
+		lines[slices.Index(lines, quotaLine)] = "See --quota below.\n--quota: Int. Default 5."
+
+		if got := SkillOmissions(root, catalog, strings.Join(lines, "\n")); len(got) != 0 {
+			t.Errorf("SkillOmissions = %q, want none", got)
+		}
+	})
 
 	t.Run("a nil command has no interface", func(t *testing.T) {
 		if got := SkillOmissions(nil, nil, ""); got != nil {

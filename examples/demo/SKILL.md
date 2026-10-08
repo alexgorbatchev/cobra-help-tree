@@ -4,7 +4,7 @@ description: Use when running mytool, the cobra-help-tree demonstration CLI, to 
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-08 09:21
-  last_modified: 2026-10-08 09:21
+  last_modified: 2026-10-08 10:45
   status: current
 ---
 
@@ -21,7 +21,7 @@ Run `mytool` with `AGENT=1`. A command then answers on stdout with a `command:` 
 - `mytool version`: takes no arguments.
 - `mytool skill`: print this guide, byte for byte. Takes no arguments.
 - `mytool help [command]`: print the help of a command, the screen `--help` prints for it.
-- `mytool completion bash`, `mytool completion fish`, `mytool completion powershell`, `mytool completion zsh`: print a completion script for that shell on stdout. `--no-descriptions` (boolean, default `false`) leaves the command descriptions out of the completions.
+- `mytool completion bash`, `mytool completion fish`, `mytool completion powershell`, `mytool completion zsh`: print a completion script for that shell on stdout. `--no-descriptions` (bool, default `false`) leaves the command descriptions out of the completions.
 
 `mytool`, `mytool user`, `mytool user token`, and `mytool completion` are groups. Run one without a command to print its help, which lists everything below it.
 
@@ -29,8 +29,8 @@ Run `mytool` with `AGENT=1`. A command then answers on stdout with a `command:` 
 
 Every command accepts both.
 
-- `--config <path>`, `-c <path>`: path to the configuration file. String, default `~/.config/mytool.yaml`.
-- `--help`, `-h`: print the help of the command instead of running it.
+- `--config <path>`, `-c <path>` (string, default `~/.config/mytool.yaml`): path to the configuration file.
+- `--help`, `-h` (bool, default `false`): print the help of the command instead of running it.
 
 ## Errors
 
