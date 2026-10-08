@@ -65,24 +65,24 @@ func TestRenderAgentHelpListsTheWholeSubtree(t *testing.T) {
 			path: "app",
 			want: "subcommands:\n" +
 				"  - playlist: Inspect and manage playlists\n" +
-				"    - create: Create a playlist\n" +
+				"    - create <name>: Create a playlist\n" +
 				"    - list: Display all playlists\n" +
 				"    - track: Manage playlist track memberships\n" +
-				"      - add: Add track to playlist\n" +
-				"      - rm: Remove track from playlist\n" +
+				"      - add <pl|id> <tr|id|path...>: Add track to playlist\n" +
+				"      - rm <pl|id> <tr|id|path...>: Remove track from playlist\n" +
 				"  - track: Manage audio files\n" +
-				"    - add: Import audio file\n" +
+				"    - add <path...>: Import audio file\n" +
 				"flags:\n",
 		},
 		{
 			name: "a group lists its own subtree from the first level",
 			path: "app playlist",
 			want: "subcommands:\n" +
-				"  - create: Create a playlist\n" +
+				"  - create <name>: Create a playlist\n" +
 				"  - list: Display all playlists\n" +
 				"  - track: Manage playlist track memberships\n" +
-				"    - add: Add track to playlist\n" +
-				"    - rm: Remove track from playlist\n" +
+				"    - add <pl|id> <tr|id|path...>: Add track to playlist\n" +
+				"    - rm <pl|id> <tr|id|path...>: Remove track from playlist\n" +
 				"flags:\n",
 		},
 	}
@@ -106,7 +106,7 @@ func TestRenderAgentHelpListsTheWholeSubtree(t *testing.T) {
 	t.Run("a nested command takes its summary from the catalog", func(t *testing.T) {
 		catalog := TechCatalog{"app playlist track add": TechInfo{Summary: "Catalog summary for add"}}
 		out := RenderAgentHelp(root, catalog, AgentOptions{})
-		if !strings.Contains(out, "      - add: Catalog summary for add\n") {
+		if !strings.Contains(out, "      - add <pl|id> <tr|id|path...>: Catalog summary for add\n") {
 			t.Errorf("catalog summary did not reach a nested subcommand:\n%s", out)
 		}
 	})
@@ -114,11 +114,77 @@ func TestRenderAgentHelpListsTheWholeSubtree(t *testing.T) {
 	t.Run("a clipped nested entry keeps its name", func(t *testing.T) {
 		const maxWidth = 24
 		out := RenderAgentHelp(root, nil, AgentOptions{MaxLineWidth: maxWidth})
-		want := "      - add: Add trac" + ellipsis + "\n"
+		want := "    - list: Display a" + ellipsis + "\n"
 		if !strings.Contains(out, want) {
 			t.Errorf("nested entry was not clipped to %d cells with its name intact, want %q:\n%s", maxWidth, want, out)
 		}
 	})
+}
+
+func TestRenderAgentHelpUsageLineAdvertisesSubcommands(t *testing.T) {
+	// The human usage line says when a command takes a subcommand, and the agent
+	// line has to say the same: it is the only syntax summary on the screen.
+	root := buildSampleCommandHierarchy()
+
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{"the root", "app", "usage: app [flags] [command]\n"},
+		{"a group", "app playlist", "usage: app playlist [flags] [command]\n"},
+		{"a leaf", "app playlist list", "usage: app playlist list [flags]\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := findCommand(t, root, tt.path)
+
+			agent := RenderAgentHelp(cmd, nil, AgentOptions{})
+			if !strings.Contains(agent, "\n"+tt.want) {
+				t.Errorf("agent help does not carry %q:\n%s", tt.want, agent)
+			}
+
+			human := RenderTreeUsage(cmd, nil, TreeOptions{TerminalWidth: 200})
+			if !strings.Contains(human, "Usage:\n  "+strings.TrimPrefix(tt.want, "usage: ")) {
+				t.Errorf("the human usage line disagrees with the agent one %q:\n%s", tt.want, human)
+			}
+		})
+	}
+}
+
+func TestRenderAgentHelpStatesOnlyDefaultsThatAreSet(t *testing.T) {
+	// A default equal to the type's zero value says nothing the type does not, so
+	// pflag leaves it out of the human screen and the agent screen follows.
+	root := &cobra.Command{Use: "app", Short: "App"}
+	root.Flags().Bool("force", false, "Force it")
+	root.Flags().String("name", "", "Name to use")
+	root.Flags().Int("retries", 0, "Retries before giving up")
+	root.Flags().Duration("wait", 0, "Time to wait")
+	root.Flags().StringSlice("tag", nil, "Tags to apply")
+	root.Flags().String("mode", "", "Mode (default mode is fast)")
+	root.Flags().StringP("config", "c", "cfg.yaml", "Config path")
+	root.Flags().Int("workers", 4, "Parallel workers")
+	root.Flags().Bool("color", true, "Colour the output")
+
+	out := RenderAgentHelp(root, nil, AgentOptions{})
+
+	for _, want := range []string{
+		"  --force bool: Force it\n",
+		"  --name string: Name to use\n",
+		"  --retries int: Retries before giving up\n",
+		"  --wait duration: Time to wait\n",
+		"  --tag stringSlice: Tags to apply\n",
+		// A usage text that happens to speak of a default is not a default.
+		"  --mode string: Mode (default mode is fast)\n",
+		"  -c, --config string: Config path (default: \"cfg.yaml\")\n",
+		"  --workers int: Parallel workers (default: \"4\")\n",
+		"  --color bool: Colour the output (default: \"true\")\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("agent flags missing the line %q:\n%s", want, out)
+		}
+	}
 }
 
 func TestRenderAgentHelpIncludesPersistentAndInheritedFlags(t *testing.T) {

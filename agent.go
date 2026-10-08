@@ -51,7 +51,9 @@ func RenderAgentHelp(cmd *cobra.Command, cat TechCatalog, opt AgentOptions) stri
 		sb.WriteString(fmt.Sprintf("description: %s\n", strings.TrimSpace(cmd.Long)))
 	}
 
-	sb.WriteString(fmt.Sprintf("usage: %s\n", cmd.UseLine()))
+	// Agent mode never hides a command, so the line advertises subcommands
+	// whenever cobra finds one available.
+	sb.WriteString(fmt.Sprintf("usage: %s\n", usageLine(cmd, false)))
 
 	// A deprecated command is absent from every listing, so an agent reaching this
 	// screen is one that already knows the command and needs to be told not to keep
@@ -120,7 +122,13 @@ func RenderAgentHelp(cmd *cobra.Command, cat TechCatalog, opt AgentOptions) stri
 		if f.Shorthand != "" {
 			short = "-" + f.Shorthand + ", "
 		}
-		flagLines = append(flagLines, fmt.Sprintf("  %s--%s %s: %s (default: %q)", short, f.Name, f.Value.Type(), f.Usage, f.DefValue))
+		line := fmt.Sprintf("  %s--%s %s: %s", short, f.Name, f.Value.Type(), f.Usage)
+		// A default equal to the type's zero value says nothing the type does not,
+		// so it is left out, as pflag leaves it out of the human screen.
+		if hasNonZeroDefault(f) {
+			line += fmt.Sprintf(" (default: %q)", f.DefValue)
+		}
+		flagLines = append(flagLines, line)
 	})
 
 	if len(flagLines) > 0 {
@@ -158,10 +166,29 @@ func agentSubcommands(parent *cobra.Command, cat TechCatalog, depth int) string 
 		if info, ok := cat[sub.CommandPath()]; ok && info.Summary != "" {
 			summary = info.Summary
 		}
-		sb.WriteString(agentListItemAt(depth, sub.Name(), summary))
+		// Use rather than Name, so an entry carries the command's arguments as its
+		// branch in the human tree does and the list is enough to call the command.
+		sb.WriteString(agentListItemAt(depth, sub.Use, summary))
 		sb.WriteString(agentSubcommands(sub, cat, depth+1))
 	}
 	return sb.String()
+}
+
+// hasNonZeroDefault reports whether f has a default worth stating, by pflag's own
+// judgement. pflag prints "(default ...)" in a flag's usage line for exactly those
+// flags and exposes the test no other way, so the answer is read off that line.
+// The probe carries no usage text, hidden mark or deprecation of its own: the
+// first could contain the words looked for, and the other two keep a flag out of
+// the usage altogether.
+func hasNonZeroDefault(f *pflag.Flag) bool {
+	probe := *f
+	probe.Usage = ""
+	probe.Hidden = false
+	probe.Deprecated = ""
+
+	flags := pflag.NewFlagSet("", pflag.ContinueOnError)
+	flags.AddFlag(&probe)
+	return strings.Contains(flags.FlagUsages(), "(default ")
 }
 
 // agentListIndent is one level of an agent-mode list: the indent of a top-level

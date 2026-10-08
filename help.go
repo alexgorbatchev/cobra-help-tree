@@ -67,11 +67,7 @@ func RenderTreeUsage(cmd *cobra.Command, cat TechCatalog, opt TreeOptions) strin
 	}
 
 	sb.WriteString("Usage:\n  ")
-	useLine := cmd.UseLine()
-	if len(visibleSubcommands(cmd, opt.HideGeneratedCommands)) > 0 && !strings.Contains(useLine, "[command]") {
-		useLine += " [command]"
-	}
-	sb.WriteString(useLine)
+	sb.WriteString(usageLine(cmd, opt.HideGeneratedCommands))
 	sb.WriteString("\n")
 
 	// The arguments block, the command tree, and the environment variables block
@@ -127,6 +123,21 @@ func RenderTreeUsage(cmd *cobra.Command, cat TechCatalog, opt TreeOptions) strin
 	}
 
 	return sb.String()
+}
+
+// usageLine returns cobra's usage line for cmd, with " [command]" appended when
+// cmd has subcommands to list and the line does not say so already. Cobra's own
+// template prints that as a second usage line; both modes here state it on the
+// one line, so the human screen and the agent screen describe the same syntax.
+//
+// Call it after the command's flags have been read: reading them decides whether
+// cobra appends "[flags]". See applicableFlags.
+func usageLine(cmd *cobra.Command, hideGenerated bool) string {
+	line := cmd.UseLine()
+	if len(visibleSubcommands(cmd, hideGenerated)) > 0 && !strings.Contains(line, "[command]") {
+		line += " [command]"
+	}
+	return line
 }
 
 const quickstartIndent = "  "
