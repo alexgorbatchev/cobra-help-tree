@@ -168,19 +168,17 @@ func TestRenderersAgreeOnVisibleSubcommands(t *testing.T) {
 	root.InitDefaultHelpCmd()
 	root.InitDefaultCompletionCmd()
 
-	// The tree recurses, so it lists completion's shell children as well; the agent
-	// screen and the usage line report only the direct children.
-	wantNested := []string{"bash", "child", "completion", "fish", "group", "powershell", "visible", "zsh"}
-	wantDirect := []string{"completion", "group", "visible"}
+	// Every screen recurses, so each lists completion's shell children as well.
+	want := []string{"bash", "child", "completion", "fish", "group", "powershell", "visible", "zsh"}
 
 	screens := []struct {
 		name   string
 		screen string
 		want   []string
 	}{
-		{"tree", FormatCommandTree(root, TreeOptions{TerminalWidth: 200}), wantNested},
-		{"usage", RenderTreeUsage(root, nil, TreeOptions{TerminalWidth: 200}), wantNested},
-		{"agent", RenderAgentHelp(root, nil, AgentOptions{}), wantDirect},
+		{"tree", FormatCommandTree(root, TreeOptions{TerminalWidth: 200}), want},
+		{"usage", RenderTreeUsage(root, nil, TreeOptions{TerminalWidth: 200}), want},
+		{"agent", RenderAgentHelp(root, nil, AgentOptions{}), want},
 	}
 
 	for _, tt := range screens {
@@ -228,7 +226,7 @@ func TestHideGeneratedCommands(t *testing.T) {
 	// verdict and nothing else. The option is human-mode formatting, which is why it
 	// lives on TreeOptions alone.
 	t.Run("agent output keeps reporting the whole interface", func(t *testing.T) {
-		want := []string{"completion", "visible"}
+		want := []string{"bash", "completion", "fish", "powershell", "visible", "zsh"}
 		if got := listedCommands(RenderAgentHelp(root, nil, AgentOptions{})); !slices.Equal(got, want) {
 			t.Errorf("agent screen lists %v, want %v", got, want)
 		}

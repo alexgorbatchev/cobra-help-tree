@@ -49,6 +49,78 @@ func TestRenderAgentHelp(t *testing.T) {
 	}
 }
 
+func TestRenderAgentHelpListsTheWholeSubtree(t *testing.T) {
+	// One request for help has to describe everything below the command, as the
+	// human tree does: an agent that sees only the next level down needs a further
+	// call per group to learn what the CLI offers.
+	root := buildSampleCommandHierarchy()
+
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{
+			name: "the root lists every level",
+			path: "app",
+			want: "subcommands:\n" +
+				"  - playlist: Inspect and manage playlists\n" +
+				"    - create: Create a playlist\n" +
+				"    - list: Display all playlists\n" +
+				"    - track: Manage playlist track memberships\n" +
+				"      - add: Add track to playlist\n" +
+				"      - rm: Remove track from playlist\n" +
+				"  - track: Manage audio files\n" +
+				"    - add: Import audio file\n" +
+				"flags:\n",
+		},
+		{
+			name: "a group lists its own subtree from the first level",
+			path: "app playlist",
+			want: "subcommands:\n" +
+				"  - create: Create a playlist\n" +
+				"  - list: Display all playlists\n" +
+				"  - track: Manage playlist track memberships\n" +
+				"    - add: Add track to playlist\n" +
+				"    - rm: Remove track from playlist\n" +
+				"flags:\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out := RenderAgentHelp(findCommand(t, root, tt.path), nil, AgentOptions{})
+			if !strings.Contains(out, tt.want) {
+				t.Errorf("agent help does not list the subtree as\n%s\ngot:\n%s", tt.want, out)
+			}
+		})
+	}
+
+	t.Run("a leaf has no subcommands block", func(t *testing.T) {
+		out := RenderAgentHelp(findCommand(t, root, "app playlist list"), nil, AgentOptions{})
+		if strings.Contains(out, "subcommands:") {
+			t.Errorf("a leaf command reported subcommands:\n%s", out)
+		}
+	})
+
+	t.Run("a nested command takes its summary from the catalog", func(t *testing.T) {
+		catalog := TechCatalog{"app playlist track add": TechInfo{Summary: "Catalog summary for add"}}
+		out := RenderAgentHelp(root, catalog, AgentOptions{})
+		if !strings.Contains(out, "      - add: Catalog summary for add\n") {
+			t.Errorf("catalog summary did not reach a nested subcommand:\n%s", out)
+		}
+	})
+
+	t.Run("a clipped nested entry keeps its name", func(t *testing.T) {
+		const maxWidth = 24
+		out := RenderAgentHelp(root, nil, AgentOptions{MaxLineWidth: maxWidth})
+		want := "      - add: Add trac" + ellipsis + "\n"
+		if !strings.Contains(out, want) {
+			t.Errorf("nested entry was not clipped to %d cells with its name intact, want %q:\n%s", maxWidth, want, out)
+		}
+	})
+}
+
 func TestRenderAgentHelpIncludesPersistentAndInheritedFlags(t *testing.T) {
 	// cobra's Flags() does not merge persistent flags; only LocalFlags() and
 	// InheritedFlags() call mergePersistentFlags. Rendering straight off Flags()

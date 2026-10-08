@@ -230,17 +230,18 @@ func argCatalog() TechCatalog {
 
 // listedCommands returns the command names a screen actually lists, sorted. It
 // reads both shapes the renderers produce: a tree branch ("├─ name") and an
-// agent-mode list item ("  - name: summary"). Matching on entries rather than on
-// raw substrings keeps prose such as the trailing `--help` hint out of the result.
+// agent-mode list item at any depth ("  - name: summary"). Matching on entries
+// rather than on raw substrings keeps prose such as the trailing `--help` hint
+// out of the result.
 func listedCommands(screen string) []string {
 	var names []string
 	for _, line := range strings.Split(screen, "\n") {
 		var entry string
-		switch {
+		switch item := strings.TrimLeft(line, " "); {
 		case strings.Contains(line, "─ "):
 			_, entry, _ = strings.Cut(line, "─ ")
-		case strings.HasPrefix(line, "  - "):
-			entry = strings.TrimPrefix(line, "  - ")
+		case item != line && strings.HasPrefix(item, "- "):
+			entry = strings.TrimPrefix(item, "- ")
 		default:
 			continue
 		}

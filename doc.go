@@ -12,6 +12,10 @@
 // and "env:" keys in agent mode. Commands can also supply "quickstart" example
 // commands with automatically aligned inline comments.
 //
+// Both modes list the whole command tree below the command asked about: as
+// branches in human mode, and as a nested list under "subcommands:" in agent
+// mode.
+//
 // # Concurrency
 //
 // The renderers are not safe to call concurrently on commands that share a root.

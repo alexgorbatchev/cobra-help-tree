@@ -7,7 +7,7 @@ A lightweight, zero-configuration Go library that replaces Cobra's default flat 
 - **Nested ASCII Hierarchy**: Renders multi-level command trees using rounded box-drawing glyphs (`├─ `, `╰─ `, `│  `).
 - **Terminal Cell Alignment**: Measures display width in terminal cells rather than runes, so descriptions stay aligned when command names contain wide CJK characters or emoji.
 - **Dynamic Terminal Width Protection**: Detects terminal width and truncates descriptions with a trailing ellipsis (`...`) before line wrapping occurs.
-- **Native Dual-Mode (`AGENT=1`)**: Switches to token-conservative key-value help when `AGENT=1` is present.
+- **Native Dual-Mode (`AGENT=1`)**: Switches to token-conservative key-value help when `AGENT=1` is present, with the whole command tree as a nested list.
 - **Documented Arguments & Environment Variables**: Renders per-argument and environment variable descriptions in both modes, in a column shared with the command tree, from a catalog keyed on command paths.
 - **Aligned Quickstart Invocations**: Formats example command lines and aligns inline comments with automatic `#` comment prefixing.
 - **Help on Stdout**: Writes requested help screens to stdout so `--help` survives pipes and redirection.
@@ -22,7 +22,7 @@ A lightweight, zero-configuration Go library that replaces Cobra's default flat 
 - Quickstart command examples format cleanly with inline comments aligned across the block.
 - Asking for help on a command group shows everything nested beneath it, not just the next level down.
 - Descriptions too long for the window are shortened with `...`, so lines never wrap and break the columns.
-- Setting `AGENT=1` swaps the decorated tree for compact output aimed at scripts and AI agents.
+- Setting `AGENT=1` swaps the decorated tree for compact output aimed at scripts and AI agents, which still lists every command below the one asked about.
 - Help lands on stdout, so it can be piped into a pager or saved to a file.
 
 # How it Really Works
@@ -37,7 +37,7 @@ A lightweight, zero-configuration Go library that replaces Cobra's default flat 
 - Cobra's generated `help` command is absent for the same reason: `IsAvailableCommand` excludes it by identity (`Parent().helpCommand == c`), and only Cobra's help *template* re-adds it by name, which this library does not do. The generated `completion` command is listed by default, as Cobra lists it; `TreeOptions.HideGeneratedCommands` drops it from the human screens. That filter is aimed at a command named `completion` directly under the root, which is the only place Cobra generates one — `InitDefaultCompletionCmd` returns early when a root child already uses that name — so a `completion` command of your own deeper in the tree is never mistaken for Cobra's.
 - Column width is measured in terminal cells with `runewidth.StringWidth`, because a CJK ideograph or emoji is a single rune occupying two cells; rune counts would shift the description column.
 - Descriptions are clipped with `runewidth.Truncate` against the detected width, resolved from `$COLUMNS` first and then `term.GetSize` on the stdout file descriptor, falling back to no clipping when neither reports a size. Flag descriptions are wrapped to the same width so lines stay within terminal boundaries.
-- `RenderAgentHelp` emits flat `key: value` lines. Caller-supplied `TechInfo.Metadata` is nested under its own `metadata:` key and sorted, so it cannot collide with a reserved key and renders byte-identically across runs.
+- `RenderAgentHelp` emits `key: value` lines. Under `subcommands:` it lists the whole subtree, each group's commands indented two spaces beneath it, so one request for help describes everything the command offers. Caller-supplied `TechInfo.Metadata` is nested under its own `metadata:` key and sorted, so it cannot collide with a reserved key and renders byte-identically across runs.
 - Both renderers report the same flags for a command, combining its local and inherited sets rather than reading `cmd.Flags()`, which carries persistent flags only after Cobra has merged them.
 - Rendering mutates the command: Cobra's flag merge writes to the root and every ancestor, so the renderers are not safe to call concurrently on commands sharing a root. Commands installed through `Setup` are unaffected, because Cobra executes a command tree on one goroutine.
 
@@ -190,7 +190,7 @@ Use "mytool user [command] --help" for more information about a command.
 
 ### Rendered Output (Agent Mode: `AGENT=1`)
 
-The same command under `AGENT=1` drops padding, glyphs, and dividers in favour of flat key-value lines:
+The same command under `AGENT=1` drops padding, glyphs, and dividers in favour of key-value lines, and lists the whole tree as a nested list:
 
 ```yaml
 command: mytool
@@ -199,12 +199,23 @@ description: mytool manages user accounts and their API tokens.
 usage: mytool [flags]
 subcommands:
   - completion: Generate the autocompletion script for the specified shell
+    - bash: Generate the autocompletion script for bash
+    - fish: Generate the autocompletion script for fish
+    - powershell: Generate the autocompletion script for powershell
+    - zsh: Generate the autocompletion script for zsh
   - user: Manage user accounts
+    - create: Create a new user
+    - delete: Remove a user
+    - token: Manage API tokens for a user
+      - issue: Issue a new API token
+      - revoke: Revoke an existing API token
   - version: Print the version and exit
 flags:
   -c, --config string: Path to configuration file (default: "~/.config/mytool.yaml")
   -h, --help bool: help for mytool (default: "false")
 ```
+
+Help on a group lists that group's subtree the same way, starting from its own commands.
 
 `HideGeneratedCommands` does not apply here. Agent output describes the interface the binary accepts, and `completion` is a command it accepts, so agent mode always reports Cobra's own availability verdict.
 

@@ -106,20 +106,9 @@ func RenderAgentHelp(cmd *cobra.Command, cat TechCatalog, opt AgentOptions) stri
 		}
 	}
 
-	// Never hides cobra's generated commands: agent output describes the interface
-	// the binary actually accepts, and completion is a command it accepts. Hiding
-	// it is human-mode formatting, so it lives on TreeOptions.
-	visibleSubs := visibleSubcommands(cmd, false)
-	if len(visibleSubs) > 0 {
+	if subcommands := agentSubcommands(cmd, cat, 0); subcommands != "" {
 		sb.WriteString("subcommands:\n")
-		for _, sub := range visibleSubs {
-			subPath := sub.CommandPath()
-			subSummary := sub.Short
-			if subInfo, ok := cat[subPath]; ok && subInfo.Summary != "" {
-				subSummary = subInfo.Summary
-			}
-			sb.WriteString(agentListItem(sub.Name(), subSummary))
-		}
+		sb.WriteString(subcommands)
 	}
 
 	var flagLines []string
@@ -151,16 +140,49 @@ func RenderAgentHelp(cmd *cobra.Command, cat TechCatalog, opt AgentOptions) stri
 	return clipLines(sb.String(), opt.MaxLineWidth)
 }
 
-// agentListItem renders one entry of a nested agent-mode list. An entry without a
-// description is emitted as a bare name rather than as a key with nothing behind
-// it, which is the same rule clipLine applies: agent output is parsed by machine,
-// and an empty value reads as a field that lost its data.
+// agentSubcommands renders every command below parent as a nested list: one
+// entry per command, with a group's own commands indented beneath it. It lists
+// the whole subtree for the reason the human tree does, so that one request for
+// help describes everything the command offers; an agent shown only the next
+// level down would need a further call per group.
+//
+// It never hides cobra's generated commands: agent output describes the interface
+// the binary actually accepts, and completion is a command it accepts. Hiding it
+// is human-mode formatting, so it lives on TreeOptions.
+func agentSubcommands(parent *cobra.Command, cat TechCatalog, depth int) string {
+	var sb strings.Builder
+	for _, sub := range visibleSubcommands(parent, false) {
+		summary := sub.Short
+		if info, ok := cat[sub.CommandPath()]; ok && info.Summary != "" {
+			summary = info.Summary
+		}
+		sb.WriteString(agentListItemAt(depth, sub.Name(), summary))
+		sb.WriteString(agentSubcommands(sub, cat, depth+1))
+	}
+	return sb.String()
+}
+
+// agentListIndent is one level of an agent-mode list: the indent of a top-level
+// entry, and what each level of nesting adds to it.
+const agentListIndent = "  "
+
+// agentListItem renders one entry of a top-level agent-mode list.
 func agentListItem(name, desc string) string {
+	return agentListItemAt(0, name, desc)
+}
+
+// agentListItemAt renders one entry of an agent-mode list nested depth levels
+// below the top one. An entry without a description is emitted as a bare name
+// rather than as a key with nothing behind it, which is the same rule clipLine
+// applies: agent output is parsed by machine, and an empty value reads as a field
+// that lost its data.
+func agentListItemAt(depth int, name, desc string) string {
+	indent := strings.Repeat(agentListIndent, depth+1)
 	name = strings.TrimSpace(name)
 	if desc = strings.TrimSpace(desc); desc == "" {
-		return fmt.Sprintf("  - %s\n", name)
+		return fmt.Sprintf("%s- %s\n", indent, name)
 	}
-	return fmt.Sprintf("  - %s: %s\n", name, desc)
+	return fmt.Sprintf("%s- %s: %s\n", indent, name, desc)
 }
 
 // applicableFlags returns every flag that applies to cmd: its own flags and
