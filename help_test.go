@@ -239,6 +239,64 @@ func TestRenderTreeUsageWrapsFlagsToTerminalWidth(t *testing.T) {
 	}
 }
 
+func TestRenderTreeUsageWrapsTheClosingHintToTerminalWidth(t *testing.T) {
+	// The hint is the one line of the screen that is a sentence, so it is wrapped
+	// between words rather than clipped: cutting it short would drop the end of
+	// the instruction it gives.
+	const hint = `Use "app playlist [command] --help" for more information about a command.`
+	root := buildSampleCommandHierarchy()
+	playlist := findCommand(t, root, "app playlist")
+
+	t.Run("a wide terminal keeps it on one line", func(t *testing.T) {
+		out := RenderTreeUsage(playlist, nil, TreeOptions{TerminalWidth: 200})
+		if !strings.HasSuffix(out, "\n\n"+hint+"\n") {
+			t.Errorf("the hint is not the closing line %q:\n%s", hint, out)
+		}
+	})
+
+	t.Run("an unknown width keeps it on one line", func(t *testing.T) {
+		t.Setenv("COLUMNS", "")
+		withNonTerminalStdout(t)
+
+		out := RenderTreeUsage(playlist, nil, TreeOptions{})
+		if !strings.HasSuffix(out, "\n\n"+hint+"\n") {
+			t.Errorf("the hint is not the closing line %q:\n%s", hint, out)
+		}
+	})
+
+	t.Run("a narrow terminal wraps it between words", func(t *testing.T) {
+		const termWidth = 40
+
+		out := RenderTreeUsage(playlist, nil, TreeOptions{TerminalWidth: termWidth})
+		_, wrapped, found := strings.Cut(out, "\n\nUse ")
+		if !found {
+			t.Fatalf("the screen has no closing hint:\n%s", out)
+		}
+		lines := strings.Split(strings.TrimSuffix("Use "+wrapped, "\n"), "\n")
+
+		if len(lines) < 2 {
+			t.Errorf("the hint was not wrapped at %d cells: %q", termWidth, lines)
+		}
+		for _, line := range lines {
+			if w := runewidth.StringWidth(line); w > termWidth {
+				t.Errorf("hint line occupies %d cells, exceeding the terminal width %d: %q", w, termWidth, line)
+			}
+		}
+		if got := strings.Join(lines, " "); got != hint {
+			t.Errorf("wrapping changed the hint: %q, want %q", got, hint)
+		}
+	})
+
+	t.Run("a word wider than the terminal stays whole", func(t *testing.T) {
+		out := RenderTreeUsage(playlist, nil, TreeOptions{TerminalWidth: 10})
+		for _, word := range strings.Fields(hint) {
+			if !strings.Contains(out, word) {
+				t.Errorf("wrapping broke the word %q:\n%s", word, out)
+			}
+		}
+	})
+}
+
 func TestRenderTreeUsageRendersEnvironmentVariables(t *testing.T) {
 	root := buildSampleCommandHierarchy()
 	create := findCommand(t, root, "app playlist create")

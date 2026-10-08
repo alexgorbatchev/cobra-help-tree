@@ -64,6 +64,31 @@ func renderLabelRows(rows []labelRow, descStartCol int, opt TreeOptions, termWid
 	return sb.String()
 }
 
+// wrapWords breaks text between words so that no line is wider than termWidth
+// cells. A word wider than termWidth keeps a line to itself, since breaking
+// inside it would change what it says. A termWidth of zero or less returns text
+// unchanged, which is what a non-terminal stdout reports.
+func wrapWords(text string, termWidth int) string {
+	if termWidth <= 0 || runewidth.StringWidth(text) <= termWidth {
+		return text
+	}
+
+	var lines []string
+	line := ""
+	for _, word := range strings.Fields(text) {
+		switch {
+		case line == "":
+			line = word
+		case runewidth.StringWidth(line)+1+runewidth.StringWidth(word) <= termWidth:
+			line += " " + word
+		default:
+			lines = append(lines, line)
+			line = word
+		}
+	}
+	return strings.Join(append(lines, line), "\n")
+}
+
 // clipDescription truncates a description that would run past termWidth when it
 // starts at startCol, so a long description never wraps and breaks the column.
 func clipDescription(desc string, startCol, termWidth int) string {

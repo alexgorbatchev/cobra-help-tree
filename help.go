@@ -119,7 +119,12 @@ func RenderTreeUsage(cmd *cobra.Command, cat TechCatalog, opt TreeOptions) strin
 	}
 
 	if treeStr != "" {
-		sb.WriteString(fmt.Sprintf("\nUse %q for more information about a command.\n", cmd.CommandPath()+" [command] --help"))
+		// The one sentence on the screen. It is wrapped rather than clipped like the
+		// descriptions above it, because the end of it is the instruction.
+		hint := fmt.Sprintf("Use %q for more information about a command.", cmd.CommandPath()+" [command] --help")
+		sb.WriteString("\n")
+		sb.WriteString(wrapWords(hint, opt.TerminalWidth))
+		sb.WriteString("\n")
 	}
 
 	return sb.String()
