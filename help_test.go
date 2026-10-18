@@ -287,11 +287,11 @@ func TestRenderTreeUsageWrapsTheClosingHintToTerminalWidth(t *testing.T) {
 		}
 	})
 
-	t.Run("a word wider than the terminal stays whole", func(t *testing.T) {
+	t.Run("a word wider than the terminal is clipped", func(t *testing.T) {
 		out := RenderTreeUsage(playlist, nil, TreeOptions{TerminalWidth: 10})
-		for _, word := range strings.Fields(hint) {
-			if !strings.Contains(out, word) {
-				t.Errorf("wrapping broke the word %q:\n%s", word, out)
+		for _, line := range strings.Split(out, "\n") {
+			if runewidth.StringWidth(line) > 10 {
+				t.Errorf("line exceeds width: %q", line)
 			}
 		}
 	})
