@@ -61,7 +61,7 @@ func renderLabelRows(rows []labelRow, descStartCol int, opt TreeOptions, termWid
 		sb.WriteString("\n")
 	}
 
-	return sb.String()
+	return clipHumanLines(sb.String(), termWidth)
 }
 
 // wrapWords breaks text between words so that no line is wider than termWidth

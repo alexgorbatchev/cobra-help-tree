@@ -131,21 +131,6 @@ func RenderTreeUsage(cmd *cobra.Command, cat TechCatalog, opt TreeOptions) strin
 	return clipHumanLines(sb.String(), opt.TerminalWidth)
 }
 
-// clipHumanLines enforces the screen boundary for free-form descriptions,
-// examples, long flag values, and labels that cannot fit the aligned columns.
-// Agent rendering does not pass through this human presentation boundary.
-func clipHumanLines(text string, width int) string {
-	if width <= 0 {
-		return text
-	}
-	lines := strings.Split(text, "\n")
-	for i, line := range lines {
-		line = strings.ReplaceAll(line, "\t", "    ")
-		lines[i] = runewidth.Truncate(line, width, ellipsis)
-	}
-	return strings.Join(lines, "\n")
-}
-
 // usageLine returns cobra's usage line for cmd, with " [command]" appended when
 // cmd has subcommands to list and the line does not say so already. Cobra's own
 // template prints that as a second usage line; both modes here state it on the
