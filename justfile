@@ -7,11 +7,11 @@ default:
 
 # Run the example CLI in human mode, e.g. `just run user create --help`
 run *args:
-    go run ./examples/demo {{args}}
+    go run ./examples/demo {{ args }}
 
 # Run the example CLI in agent mode, e.g. `just run-ai user create --help`
 run-ai *args:
-    AGENT=1 go run ./examples/demo {{args}}
+    AGENT=1 go run ./examples/demo {{ args }}
 
 # Run all unit tests
 test:
@@ -29,10 +29,10 @@ coverage:
     packages="$(go list -f '{{{{if not (eq .Name "main")}}{{{{.ImportPath}}{{{{end}}' ./... | paste -sd, -)"
     go test -race -coverpkg="${packages}" -coverprofile=coverage.out ./...
     total="$(go tool cover -func=coverage.out | awk '/^total:/ { print substr($3, 1, length($3) - 1) }')"
-    if awk "BEGIN { exit ({{min_coverage}} <= ${total}) ? 0 : 1 }"; then
-        echo "statement coverage ${total}% meets the {{min_coverage}}% floor"
+    if awk "BEGIN { exit ({{ min_coverage }} <= ${total}) ? 0 : 1 }"; then
+        echo "statement coverage ${total}% meets the {{ min_coverage }}% floor"
     else
-        echo "statement coverage ${total}% is below the {{min_coverage}}% floor" >&2
+        echo "statement coverage ${total}% is below the {{ min_coverage }}% floor" >&2
         exit 1
     fi
 
@@ -57,3 +57,7 @@ lint:
     fi
     go vet ./...
     go mod tidy -diff
+
+# Download project dependencies for local development
+setup:
+    go mod download
