@@ -48,15 +48,6 @@ A lightweight, zero-configuration Go library that replaces Cobra's default flat 
 - Both renderers report the same flags for a command, combining its local and inherited sets rather than reading `cmd.Flags()`, which carries persistent flags only after Cobra has merged them.
 - Rendering mutates the command: Cobra's flag merge writes to the root and every ancestor, so the renderers are not safe to call concurrently on commands sharing a root. Commands installed through `Setup` are unaffected, because Cobra executes a command tree on one goroutine.
 
-## Unexpected flags in help
-
-Cobra folds `pflag.CommandLine` into every root command's persistent flags, so a flag registered through a package-level `pflag.String`, `pflag.Bool` and so on — by your code or by any library linked into the binary — becomes a real flag of your CLI. Help lists it because the binary genuinely accepts it:
-
-```console
-$ mytool --injected-global=xyz    # parses successfully
-```
-
-Suppressing it in help would document an interface the binary does not have, so these renderers show it. To keep such a flag out, register it on a `FlagSet` of your own instead of pflag's global one. This concerns pflag's global set only; the standard library's `flag` package is never consulted by Cobra, and its flags appear neither in help nor in parsing.
 - Help is written to `c.OutOrStdout()`, matching Cobra's own default help function. Cobra's `c.Print` falls back to stderr, which would break redirection.
 - Every `TreeOptions` field falls back to its default when left at zero, so `TreeOptions{}` is fully configured; `Validate` rejects negative sizing values rather than silently coercing them, and a nil command is reported rather than ignored.
 - `TreeOptions` holds human-mode formatting and `AgentOptions` holds agent-mode settings, so each renderer receives only the struct it reads; `HelpOptions` composes both for `Setup`, the one caller that spans the two modes. A `TechCatalog` is content rather than formatting and both modes render its arguments, so it is a parameter of its own rather than a field of either struct.
@@ -503,23 +494,15 @@ Calls to `SetOut` on the root command redirect help output as usual.
 | `IsAgentMode() bool` | Report whether `AGENT` is truthy |
 | `GetTerminalWidth() int` | Detected terminal width in columns, or `0` when not a terminal |
 
-# Development
+# Flags From Linked Libraries
 
-Tasks run through [`just`](https://just.systems). The same recipes run in CI, so a green `just check` locally means a green build.
+Cobra folds `pflag.CommandLine` into every root command's persistent flags, so a flag registered through a package-level `pflag.String`, `pflag.Bool` and so on — by your code or by any library linked into the binary — becomes a real flag of your CLI. Help lists it because the binary genuinely accepts it:
 
-| Recipe | Purpose |
-| :--- | :--- |
-| `just run <args>` | Run `examples/demo` in human mode, e.g. `just run user create --help` |
-| `just run-ai <args>` | Run `examples/demo` with `AGENT=1` |
-| `just test` | Run the unit tests with coverage reported |
-| `just coverage` | Run every test under `-race`, measure the library packages, and fail below the 90% statement coverage floor |
-| `just check` | `just lint` followed by `just coverage`; what CI runs |
-| `just fmt` | Format the source with `go fmt` |
-| `just lint` | Fails on unformatted files (`gofmt -l`), `go vet` findings, or an untidy `go.mod` (`go mod tidy -diff`) |
+```console
+$ mytool --injected-global=xyz    # parses successfully
+```
 
-The floor lives in the `min_coverage` variable at the top of the `justfile`. Every package's tests run, but only the library packages are measured, so `examples/demo` is exercised by CI without its own statements diluting the number.
-
-Unit tests are offline, hermetic and deterministic. Tests that assert which stream output lands on replace `os.Stdout` and `os.Stderr` with pipes, because Cobra's `SetOut` writer backs both `OutOrStdout` and `OutOrStderr` and would mask the difference.
+Suppressing it in help would document an interface the binary does not have, so these renderers show it. To keep such a flag out, register it on a `FlagSet` of your own instead of pflag's global one. This concerns pflag's global set only; the standard library's `flag` package is never consulted by Cobra, and its flags appear neither in help nor in parsing.
 
 # License
 
