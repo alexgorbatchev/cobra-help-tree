@@ -1,4 +1,4 @@
-module github.com/alexgorbatchev/cobra-help-tree/v2
+module github.com/alexgorbatchev/cobra-help-tree/v3
 
 go 1.26.2
 

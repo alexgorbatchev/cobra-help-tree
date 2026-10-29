@@ -22,7 +22,7 @@ func TestAgentOptionsValidate(t *testing.T) {
 	}
 }
 
-func TestHelpOptionsValidateDelegatesToTree(t *testing.T) {
+func TestHelpOptionsValidateDelegatesToEachPart(t *testing.T) {
 	if err := (HelpOptions{}).Validate(); err != nil {
 		t.Errorf("zero HelpOptions should be valid, got: %v", err)
 	}
@@ -41,6 +41,18 @@ func TestHelpOptionsValidateDelegatesToTree(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "MaxLineWidth") {
 		t.Errorf("error %q does not name the offending field", err)
+	}
+
+	err = HelpOptions{Skill: SkillSource{Branch: "main"}}.Validate()
+	if err == nil {
+		t.Fatal("expected HelpOptions.Validate to surface the nested SkillSource error")
+	}
+	if !strings.Contains(err.Error(), "Skill.Repository") {
+		t.Errorf("error %q does not name the offending field", err)
+	}
+
+	if err := (HelpOptions{Skill: SkillSource{Repository: "acme/app-cli", Branch: "main"}}).Validate(); err != nil {
+		t.Errorf("a full SkillSource should be valid, got: %v", err)
 	}
 }
 

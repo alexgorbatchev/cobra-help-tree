@@ -4,7 +4,7 @@ description: Use when running mytool, the cobra-help-tree demonstration CLI, to 
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-08 09:21
-  last_modified: 2026-10-08 10:45
+  last_modified: 2026-10-29 12:06
   status: current
 ---
 
@@ -19,7 +19,7 @@ Run `mytool` with `AGENT=1`. A command then answers on stdout with a `command:` 
 - `mytool user token issue <user-id>`: issue an API token that belongs to that user.
 - `mytool user token revoke <token-id>`: invalidate that token at once.
 - `mytool version`: takes no arguments.
-- `mytool skill`: print this guide, byte for byte. Takes no arguments.
+- `mytool skill`: print how to install this skill with the Skills CLI and the URL it is published at. Takes no arguments.
 - `mytool help [command]`: print the help of a command, the screen `--help` prints for it.
 - `mytool completion bash`, `mytool completion fish`, `mytool completion powershell`, `mytool completion zsh`: print a completion script for that shell on stdout. `--no-descriptions` (bool, default `false`) leaves the command descriptions out of the completions.
 

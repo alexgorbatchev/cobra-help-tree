@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 
-	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
+	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v3"
 )
 
 // The demo is what `just run` drives and what the README's screens are generated
@@ -65,7 +67,15 @@ func TestDemoRendersAgentHelp(t *testing.T) {
 	}
 }
 
-func TestDemoPrintsItsSkill(t *testing.T) {
+func TestDemoPrintsHowToInstallItsSkill(t *testing.T) {
+	const want = "Install the mytool skill using the Skills CLI:\n" +
+		"\n" +
+		"  npx skills add example/mytool --skill mytool\n" +
+		"\n" +
+		"Skill:\n" +
+		"\n" +
+		"  https://github.com/example/mytool/tree/main/skills/mytool\n"
+
 	for _, agentEnv := range []string{"0", "1"} {
 		t.Run("AGENT="+agentEnv, func(t *testing.T) {
 			t.Setenv("AGENT", agentEnv)
@@ -79,8 +89,8 @@ func TestDemoPrintsItsSkill(t *testing.T) {
 			if err := root.Execute(); err != nil {
 				t.Fatalf("skill: %v", err)
 			}
-			if out.String() != skill {
-				t.Errorf("skill printed something other than the embedded SKILL.md:\n%s", out.String())
+			if got := out.String(); got != want {
+				t.Errorf("skill printed %q, want %q", got, want)
 			}
 		})
 	}
@@ -105,11 +115,38 @@ func TestDemoAgentHelpOpensWithTheSkillAlert(t *testing.T) {
 	}
 }
 
+// readSkill returns the demo's SKILL.md as the repository holds it. The binary
+// does not carry the skill, so the tests read the maintained file itself.
+func readSkill(t *testing.T) string {
+	t.Helper()
+
+	skill, err := os.ReadFile("SKILL.md")
+	if err != nil {
+		t.Fatalf("reading SKILL.md: %v", err)
+	}
+	return string(skill)
+}
+
 // The skill is the reference an agent works from, so a command, flag, argument
 // or environment variable the demo gains has to reach it in the same change.
 func TestDemoSkillCoversTheWholeInterface(t *testing.T) {
-	if missing := cobrahelptree.SkillOmissions(newRootCommand(), newCatalog(), skill); len(missing) > 0 {
+	if missing := cobrahelptree.SkillOmissions(newRootCommand(), newCatalog(), readSkill(t)); len(missing) > 0 {
 		t.Errorf("SKILL.md does not mention:\n  %s", strings.Join(missing, "\n  "))
+	}
+}
+
+// The skill command installs the skill by the root command's name, so the
+// frontmatter has to declare that same name.
+func TestDemoSkillIsNamedAfterTheRootCommand(t *testing.T) {
+	rest, opened := strings.CutPrefix(readSkill(t), "---\n")
+	frontmatter, _, closed := strings.Cut(rest, "\n---\n")
+	if !opened || !closed {
+		t.Fatal("SKILL.md does not open with a frontmatter block")
+	}
+
+	want := "name: " + newRootCommand().Name()
+	if !slices.Contains(strings.Split(frontmatter, "\n"), want) {
+		t.Errorf("SKILL.md frontmatter does not declare %q:\n%s", want, frontmatter)
 	}
 }
 

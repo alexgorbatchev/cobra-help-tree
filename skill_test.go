@@ -11,27 +11,37 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// sampleSkill stands in for an embedded SKILL.md. The frontmatter, the blank
-// lines and the missing final newline are all there to be reproduced exactly.
-const sampleSkill = "---\nname: app\ndescription: Use when operating app.\n---\n\n# app\n\nRun `app playlist list`.\n\n\tindented line\nno newline at the end"
+// sampleSource points the sample CLI at the repository publishing its skill. The
+// branch is deliberately not "main", so a renderer that assumes one is caught.
+var sampleSource = SkillSource{Repository: "acme/app-cli", Branch: "trunk"}
+
+// sampleInstructions is what the skill command of the sample CLI, whose root is
+// "app", prints for sampleSource, byte for byte.
+const sampleInstructions = "Install the app skill using the Skills CLI:\n" +
+	"\n" +
+	"  npx skills add acme/app-cli --skill app\n" +
+	"\n" +
+	"Skill:\n" +
+	"\n" +
+	"  https://github.com/acme/app-cli/tree/trunk/skills/app\n"
 
 const sampleSkillAlert = "ALERT: Agents must read `AGENT=1 app skill` before using this tool.\n"
 
-// setupWithSkill installs the help screens and the sample skill on a fresh sample
-// hierarchy.
+// setupWithSkill installs the help screens and the sample skill source on a fresh
+// sample hierarchy.
 func setupWithSkill(t *testing.T) *cobra.Command {
 	t.Helper()
 
 	root := buildSampleCommandHierarchy()
-	if err := SetupWithOptions(root, HelpOptions{Skill: sampleSkill}); err != nil {
+	if err := SetupWithOptions(root, HelpOptions{Skill: sampleSource}); err != nil {
 		t.Fatalf("SetupWithOptions: %v", err)
 	}
 	return root
 }
 
-func TestSkillCommandPrintsTheSkillVerbatim(t *testing.T) {
-	// The skill is a document an agent reads whole, so both modes print the same
-	// bytes: no alert, no reformatting, nothing appended.
+func TestSkillCommandPrintsTheInstallInstructions(t *testing.T) {
+	// An agent and a person get the same instructions, so both modes print the
+	// same bytes: no alert, no key-value reformatting.
 	for _, agentEnv := range []string{"0", "1"} {
 		t.Run("AGENT="+agentEnv, func(t *testing.T) {
 			t.Setenv("AGENT", agentEnv)
@@ -49,13 +59,40 @@ func TestSkillCommandPrintsTheSkillVerbatim(t *testing.T) {
 				t.Fatalf("skill: %v", execErr)
 			}
 
-			if stdout != sampleSkill {
-				t.Errorf("skill printed %q, want the skill byte for byte: %q", stdout, sampleSkill)
+			if stdout != sampleInstructions {
+				t.Errorf("skill printed %q, want %q", stdout, sampleInstructions)
 			}
 			if stderr != "" {
 				t.Errorf("skill wrote to stderr: %q", stderr)
 			}
 		})
+	}
+}
+
+func TestSkillCommandNamesTheRootCommand(t *testing.T) {
+	// The skill is published under the CLI's own name, so the instructions follow
+	// the root command rather than the repository.
+	t.Setenv("AGENT", "0")
+
+	root := buildTwoCommandRoot()
+	root.Use = "other-tool [flags]"
+	if err := SetupWithOptions(root, HelpOptions{Skill: SkillSource{Repository: "acme/tools", Branch: "main"}}); err != nil {
+		t.Fatalf("SetupWithOptions: %v", err)
+	}
+	out := new(bytes.Buffer)
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"skill"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("skill: %v", err)
+	}
+
+	want := "Install the other-tool skill using the Skills CLI:\n\n" +
+		"  npx skills add acme/tools --skill other-tool\n\n" +
+		"Skill:\n\n" +
+		"  https://github.com/acme/tools/tree/main/skills/other-tool\n"
+	if got := out.String(); got != want {
+		t.Errorf("skill printed %q, want %q", got, want)
 	}
 }
 
@@ -71,8 +108,8 @@ func TestSkillCommandRejectsArguments(t *testing.T) {
 	if err := root.Execute(); err == nil {
 		t.Fatal("skill accepted a positional argument")
 	}
-	if strings.Contains(out.String(), "indented line") {
-		t.Errorf("skill printed the skill despite the rejected argument:\n%s", out.String())
+	if strings.Contains(out.String(), "npx skills add") {
+		t.Errorf("skill printed the instructions despite the rejected argument:\n%s", out.String())
 	}
 }
 
@@ -84,8 +121,92 @@ func TestSkillCommandReturnsAWriteFailure(t *testing.T) {
 	root.SetErr(io.Discard)
 	root.SetArgs([]string{"skill"})
 
-	if err := root.Execute(); !errors.Is(err, io.ErrClosedPipe) {
-		t.Errorf("skill returned %v, want the write failure %v", err, io.ErrClosedPipe)
+	err := root.Execute()
+	if !errors.Is(err, io.ErrClosedPipe) {
+		t.Fatalf("skill returned %v, want the write failure %v", err, io.ErrClosedPipe)
+	}
+	if !strings.HasPrefix(err.Error(), "writing the skill: ") {
+		t.Errorf("error %q does not say what failed", err)
+	}
+}
+
+func TestSkillSourceValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		src     SkillSource
+		wantErr string
+	}{
+		{"the zero value", SkillSource{}, ""},
+		{"a full source", SkillSource{Repository: "acme/app-cli", Branch: "main"}, ""},
+		{"a branch containing a slash", SkillSource{Repository: "acme/app-cli", Branch: "release/v3"}, ""},
+		{"a branch without a repository", SkillSource{Branch: "main"}, "Skill.Repository"},
+		{"a repository without a branch", SkillSource{Repository: "acme/app-cli"}, "Skill.Branch"},
+		{"a branch with whitespace", SkillSource{Repository: "acme/app-cli", Branch: "my branch"}, "Skill.Branch"},
+		{"a repository without an owner segment", SkillSource{Repository: "app-cli", Branch: "main"}, "Skill.Repository"},
+		{"an empty owner", SkillSource{Repository: "/app-cli", Branch: "main"}, "Skill.Repository"},
+		{"an empty repository name", SkillSource{Repository: "acme/", Branch: "main"}, "Skill.Repository"},
+		{"a lone slash", SkillSource{Repository: "/", Branch: "main"}, "Skill.Repository"},
+		{"an extra segment", SkillSource{Repository: "acme/app-cli/skills", Branch: "main"}, "Skill.Repository"},
+		{"a doubled slash", SkillSource{Repository: "acme//app-cli", Branch: "main"}, "Skill.Repository"},
+		{"a URL", SkillSource{Repository: "https://github.com/acme/app-cli", Branch: "main"}, "Skill.Repository"},
+		{"a space inside", SkillSource{Repository: "acme/app cli", Branch: "main"}, "Skill.Repository"},
+		{"a trailing newline", SkillSource{Repository: "acme/app-cli\n", Branch: "main"}, "Skill.Repository"},
+		{"a leading tab", SkillSource{Repository: "\tacme/app-cli", Branch: "main"}, "Skill.Repository"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.src.Validate()
+
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Validate() = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("Validate() accepted %+v", tt.src)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error %q does not name %s", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestSetupWithOptionsRejectsAnInvalidSkillSource(t *testing.T) {
+	t.Setenv("AGENT", "0")
+	t.Setenv("COLUMNS", "200")
+
+	root := buildTwoCommandRoot()
+	err := SetupWithOptions(root, HelpOptions{Skill: SkillSource{Repository: "acme"}})
+	if err == nil {
+		t.Fatal("SetupWithOptions accepted a partial skill source")
+	}
+	if !strings.Contains(err.Error(), "Skill.Repository") {
+		t.Errorf("error %q does not name the offending field", err)
+	}
+
+	for _, sub := range root.Commands() {
+		if isSkillCommand(sub) {
+			t.Error("a rejected skill source still added the skill command")
+		}
+	}
+	// A rejected call must not install a help function, leaving cobra's default.
+	if out := helpOutput(t, root); strings.Contains(out, "├─ add") {
+		t.Errorf("rejected skill source still installed the tree help function:\n%s", out)
+	}
+}
+
+func TestSetupWithoutASkillSourceAddsNoSkillCommand(t *testing.T) {
+	root := buildSampleCommandHierarchy()
+	if err := SetupWithOptions(root, HelpOptions{}); err != nil {
+		t.Fatalf("SetupWithOptions: %v", err)
+	}
+	for _, sub := range root.Commands() {
+		if sub.Name() == skillCommandName {
+			t.Errorf("the zero SkillSource added a %q command", sub.CommandPath())
+		}
 	}
 }
 
@@ -108,7 +229,7 @@ func TestHideGeneratedCommandsHidesTheSkillCommandFromHumanScreens(t *testing.T)
 	// completion command is generated by cobra for shells to run, so the option
 	// that keeps a human tree to the CLI's own commands drops both.
 	root := buildTwoCommandRoot()
-	if err := SetupWithOptions(root, HelpOptions{Skill: sampleSkill}); err != nil {
+	if err := SetupWithOptions(root, HelpOptions{Skill: sampleSource}); err != nil {
 		t.Fatalf("SetupWithOptions: %v", err)
 	}
 	root.InitDefaultCompletionCmd()
@@ -134,7 +255,7 @@ func TestHideGeneratedCommandsHidesTheSkillCommandFromHumanScreens(t *testing.T)
 		t.Setenv("AGENT", "0")
 
 		hidden := buildTwoCommandRoot()
-		if err := SetupWithOptions(hidden, HelpOptions{Skill: sampleSkill, Tree: TreeOptions{HideGeneratedCommands: true}}); err != nil {
+		if err := SetupWithOptions(hidden, HelpOptions{Skill: sampleSource, Tree: TreeOptions{HideGeneratedCommands: true}}); err != nil {
 			t.Fatalf("SetupWithOptions: %v", err)
 		}
 		out := new(bytes.Buffer)
@@ -144,8 +265,8 @@ func TestHideGeneratedCommandsHidesTheSkillCommandFromHumanScreens(t *testing.T)
 		if err := hidden.Execute(); err != nil {
 			t.Fatalf("skill: %v", err)
 		}
-		if out.String() != sampleSkill {
-			t.Errorf("hidden skill command printed %q, want the skill", out.String())
+		if out.String() != sampleInstructions {
+			t.Errorf("hidden skill command printed %q, want %q", out.String(), sampleInstructions)
 		}
 	})
 
@@ -244,9 +365,9 @@ func TestSkillAlertIsForAgentsOnly(t *testing.T) {
 		args     []string
 		want     string
 	}{
-		{"human help", "0", HelpOptions{Skill: sampleSkill}, []string{"--help"}, "Available Commands:"},
-		{"agent mode disabled", "1", HelpOptions{Skill: sampleSkill, DisableAgent: true}, []string{"--help"}, "Available Commands:"},
-		{"the version", "1", HelpOptions{Skill: sampleSkill}, []string{"--version"}, "app version 1.2.3\n"},
+		{"human help", "0", HelpOptions{Skill: sampleSource}, []string{"--help"}, "Available Commands:"},
+		{"agent mode disabled", "1", HelpOptions{Skill: sampleSource, DisableAgent: true}, []string{"--help"}, "Available Commands:"},
+		{"the version", "1", HelpOptions{Skill: sampleSource}, []string{"--version"}, "app version 1.2.3\n"},
 	}
 
 	for _, tt := range tests {
@@ -323,7 +444,7 @@ func TestSetupWithSkillRejectsACommandThatCannotCarryIt(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			target, root := tt.build()
 
-			err := SetupWithOptions(target, HelpOptions{Skill: sampleSkill})
+			err := SetupWithOptions(target, HelpOptions{Skill: sampleSource})
 			if err == nil {
 				t.Fatal("SetupWithOptions accepted a command that cannot carry the skill")
 			}
@@ -497,7 +618,7 @@ func TestSkillOmissions(t *testing.T) {
 	t.Run("the skill command is part of the interface", func(t *testing.T) {
 		root, catalog := buildSkillFixture()
 		skill := strings.Join(completeSkillLines, "\n")
-		if err := SetupWithOptions(root, HelpOptions{Catalog: catalog, Skill: skill}); err != nil {
+		if err := SetupWithOptions(root, HelpOptions{Catalog: catalog, Skill: sampleSource}); err != nil {
 			t.Fatalf("SetupWithOptions: %v", err)
 		}
 		if got, want := SkillOmissions(root, catalog, skill), []string{"command app skill"}; !slices.Equal(got, want) {

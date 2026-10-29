@@ -7,21 +7,13 @@
 package main
 
 import (
-	_ "embed"
 	"fmt"
 	"os"
 	"strings"
 
-	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
+	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v3"
 	"github.com/spf13/cobra"
 )
-
-// skill is the usage guide for AI agents. Embedding it puts the maintained file
-// itself into the binary, so `mytool skill` needs nothing on disk and there is no
-// second copy to keep in step.
-//
-//go:embed SKILL.md
-var skill string
 
 func main() {
 	root := newRootCommand()
@@ -52,9 +44,14 @@ func newRootCommand() *cobra.Command {
 	root.AddCommand(user)
 	root.AddCommand(&cobra.Command{Use: "version", Short: "Print the version and exit", Args: cobra.NoArgs, Run: report})
 
-	// Skill adds the `skill` command and opens every AGENT=1 screen with an alert
-	// that sends the agent to it.
-	options := cobrahelptree.HelpOptions{Catalog: newCatalog(), Skill: skill}
+	// Skill adds the `skill` command, which prints how to install the skill, and
+	// opens every AGENT=1 screen with an alert that sends the agent to it. The
+	// repository is a placeholder, so the URL the command prints is illustrative;
+	// the skill itself is SKILL.md beside this file, which the tests read from disk.
+	options := cobrahelptree.HelpOptions{
+		Catalog: newCatalog(),
+		Skill:   cobrahelptree.SkillSource{Repository: "example/mytool", Branch: "main"},
+	}
 	if err := cobrahelptree.SetupWithOptions(root, options); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

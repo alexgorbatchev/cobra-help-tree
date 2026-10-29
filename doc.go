@@ -16,10 +16,13 @@
 // branches in human mode, and as a nested list under "subcommands:" in agent
 // mode.
 //
-// HelpOptions.Skill takes the CLI's embedded guide for AI agents. Setup then adds
-// a "skill" command that prints it unchanged, and every agent-mode screen opens
-// with an alert naming that command. SkillOmissions reports what such a guide
-// fails to mention, for a test that keeps it in step with the CLI.
+// HelpOptions.Skill names the GitHub repository and branch that publish the CLI's
+// skill for AI agents at skills/<cli>/SKILL.md. Setup then adds a "skill" command
+// that prints how to install that skill with the Skills CLI and where it lives,
+// and every agent-mode screen opens with an alert naming that command. The binary
+// never embeds the skill. SkillOmissions reports what a SKILL.md fails to
+// mention, for a test that reads the file from the repository and keeps it in
+// step with the CLI.
 //
 // # Concurrency
 //

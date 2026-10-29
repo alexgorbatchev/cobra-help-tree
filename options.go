@@ -96,14 +96,15 @@ type HelpOptions struct {
 	Agent        AgentOptions // AGENT=1 rendering
 	DisableAgent bool         // If true, always renders the human tree, ignoring AGENT
 
-	// Skill is the CLI's usage guide for AI agents: the contents of its SKILL.md,
-	// embedded in the binary with go:embed. When it is set, Setup adds a "skill"
-	// command to the root that prints it byte for byte, and every AGENT=1 screen
-	// opens with an alert telling the agent to read it first.
+	// Skill names the GitHub repository that publishes the CLI's skill for AI
+	// agents. When it is set, Setup adds a "skill" command to the root that prints
+	// how to install the skill with the Skills CLI and where it is published, and
+	// every AGENT=1 screen opens with an alert telling the agent to read it first.
+	// The skill itself stays in the repository rather than in the binary.
 	//
-	// The empty default adds neither. It is content rather than formatting, like
+	// The zero value adds neither. It is content rather than formatting, like
 	// Catalog, so it sits here rather than in either mode's options.
-	Skill string
+	Skill SkillSource
 }
 
 // Validate reports the first invalid field, if any.
@@ -111,5 +112,8 @@ func (o HelpOptions) Validate() error {
 	if err := o.Tree.Validate(); err != nil {
 		return err
 	}
-	return o.Agent.Validate()
+	if err := o.Agent.Validate(); err != nil {
+		return err
+	}
+	return o.Skill.Validate()
 }

@@ -13,18 +13,78 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// skillCommandName is the command an agent runs to read the skill. It is fixed
-// rather than configurable: the alert names it, and an agent that has met one CLI
-// carrying a skill then knows the command for every other.
+// skillCommandName is the command an agent runs to learn how to install the
+// skill. It is fixed rather than configurable: the alert names it, and an agent
+// that has met one CLI carrying a skill then knows the command for every other.
 const skillCommandName = "skill"
 
 // skillAnnotation marks the skill command this library adds. The alert is tied to
 // the mark rather than to the name, so a command of the CLI's own that is merely
-// called "skill" never has a document promised on its behalf.
+// called "skill" never has a skill promised on its behalf.
 const skillAnnotation = "cobrahelptree.skill"
 
+// skillInstructions is the text the skill command prints, in both modes. The
+// verbs take the CLI name, the repository and the branch, in that order. The
+// Skills CLI finds a skill by its frontmatter name, which equals the CLI name, and
+// the skill lives at skills/<cli>/SKILL.md in the repository.
+const skillInstructions = "Install the %[1]s skill using the Skills CLI:\n" +
+	"\n" +
+	"  npx skills add %[2]s --skill %[1]s\n" +
+	"\n" +
+	"Skill:\n" +
+	"\n" +
+	"  https://github.com/%[2]s/tree/%[3]s/skills/%[1]s\n"
+
+// SkillSource names the GitHub repository that publishes a CLI's agent skill.
+// The skill lives at skills/<cli>/SKILL.md on Branch, where <cli> is the name of
+// the root command, and its frontmatter name is that same <cli>.
+//
+// The zero value means the CLI publishes no skill. A partially set value is a
+// caller mistake, which Validate reports.
+type SkillSource struct {
+	Repository string // GitHub "owner/repo"
+	Branch     string // Default branch, e.g. "main"
+}
+
+// Validate reports why s cannot locate a skill, if it cannot. The zero value is
+// valid. Otherwise Repository must be exactly "owner/repo", two non-empty
+// segments without whitespace, and Branch must be set without whitespace, which
+// Git rules out of branch names anyway.
+func (s SkillSource) Validate() error {
+	if !s.isSet() {
+		return nil
+	}
+	if s.Repository == "" {
+		return fmt.Errorf("cobrahelptree: Skill.Branch is %q but Skill.Repository is empty", s.Branch)
+	}
+	if !isGitHubRepository(s.Repository) {
+		return fmt.Errorf("cobrahelptree: Skill.Repository must be a GitHub \"owner/repo\", got %q", s.Repository)
+	}
+	if s.Branch == "" {
+		return fmt.Errorf("cobrahelptree: Skill.Branch must name the default branch of %s", s.Repository)
+	}
+	if strings.ContainsFunc(s.Branch, unicode.IsSpace) {
+		return fmt.Errorf("cobrahelptree: Skill.Branch must not contain whitespace, got %q", s.Branch)
+	}
+	return nil
+}
+
+// isSet reports whether s asks for a skill command at all.
+func (s SkillSource) isSet() bool {
+	return s != SkillSource{}
+}
+
+// isGitHubRepository reports whether repo has the "owner/repo" shape GitHub
+// gives a repository: exactly two non-empty segments and no whitespace.
+func isGitHubRepository(repo string) bool {
+	owner, name, found := strings.Cut(repo, "/")
+	return found && owner != "" && name != "" &&
+		!strings.Contains(name, "/") &&
+		!strings.ContainsFunc(repo, unicode.IsSpace)
+}
+
 // checkSkillTarget reports why cmd cannot carry the skill command, when it
-// cannot. The command is the CLI's top-level entry to its guide, so it belongs on
+// cannot. The command is the CLI's top-level entry to its skill, so it belongs on
 // the root, and it must not shadow a command the CLI already defines. The name
 // test is the one cobra applies before adding its own completion command.
 func checkSkillTarget(cmd *cobra.Command) error {
@@ -39,22 +99,26 @@ func checkSkillTarget(cmd *cobra.Command) error {
 	return nil
 }
 
-// newSkillCommand returns the command that prints skill.
+// newSkillCommand returns the command that prints how to install the skill src
+// publishes.
 //
-// It writes the document byte for byte in both modes: the skill is what an agent
-// reads before anything else, so it gets no alert of its own, no reformatting and
-// no trailing newline the file did not have. It takes no arguments and defines no
-// flags, and it returns a failed write instead of reporting success for a guide
-// the reader never received.
-func newSkillCommand(skill string) *cobra.Command {
+// The binary never carries the skill itself, so an installed skill is always the
+// one the repository holds. The command prints the same bytes in both modes and
+// gets no alert of its own, because it is what the alert sends the agent to. It
+// takes no arguments and defines no flags, and it returns a failed write instead
+// of reporting success for instructions the reader never received. The CLI name
+// is read from the tree when the command runs, so it is the name the binary
+// answers to.
+func newSkillCommand(src SkillSource) *cobra.Command {
 	return &cobra.Command{
 		Use:               skillCommandName,
-		Short:             "Print the usage guide for AI agents",
+		Short:             "Print how to install the agent skill",
 		Args:              cobra.NoArgs,
 		ValidArgsFunction: cobra.NoFileCompletions,
 		Annotations:       map[string]string{skillAnnotation: "true"},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if _, err := io.WriteString(cmd.OutOrStdout(), skill); err != nil {
+			text := fmt.Sprintf(skillInstructions, cmd.Root().Name(), src.Repository, src.Branch)
+			if _, err := io.WriteString(cmd.OutOrStdout(), text); err != nil {
 				return fmt.Errorf("writing the skill: %w", err)
 			}
 			return nil
@@ -64,8 +128,9 @@ func newSkillCommand(skill string) *cobra.Command {
 
 // SkillOmissions returns what skill fails to mention of the interface below root,
 // one sorted entry per omission, and nil when it mentions everything. A CLI's
-// tests call it with the embedded skill, so that adding or renaming a command,
-// flag, argument or environment variable fails the build until the guide follows.
+// tests call it with the SKILL.md read from the repository, the file the skill
+// command sends agents to install, so that adding or renaming a command, flag,
+// argument or environment variable fails the build until the skill follows.
 //
 // The interface is what the binary accepts once it runs: every command an agent
 // can invoke, by full path, the commands and flags cobra generates among them;

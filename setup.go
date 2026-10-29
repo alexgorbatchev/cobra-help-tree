@@ -32,7 +32,7 @@ func SetupWithOptions(cmd *cobra.Command, opt HelpOptions) error {
 	if err := opt.Validate(); err != nil {
 		return err
 	}
-	if opt.Skill != "" {
+	if opt.Skill.isSet() {
 		if err := checkSkillTarget(cmd); err != nil {
 			return err
 		}
